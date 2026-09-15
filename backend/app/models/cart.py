@@ -38,7 +38,7 @@ class Cart(Base):
         back_populates="cart"
     )
     #relationship with Cart
-    cart_items: Mapped[list["CartItem"]] = relationship(#list of CartItem objects
+    items: Mapped[list["CartItem"]] = relationship(#list of CartItem objects
         "CartItem",
         back_populates="cart",
        
