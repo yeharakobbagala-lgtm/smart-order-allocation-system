@@ -1,38 +1,27 @@
-import os
 from pathlib import Path
 
-from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.engine import URL
 
+from app.config.settings import settings
 
-# Find the project root
+
+# Project root
 BASE_DIR = Path(__file__).resolve().parents[3]
-
-# Load variables from .env
-load_dotenv(BASE_DIR / ".env")
-
-
-# Read database configuration
-DB_HOST = os.getenv("DB_HOST")
-DB_PORT = int(os.getenv("DB_PORT", "3306"))
-DB_NAME = os.getenv("DB_NAME")
-DB_USER = os.getenv("DB_USER")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
 
 
 # Location of Aiven's CA certificate
 CA_CERT_PATH = BASE_DIR / "backend" / "certs" / "ca.pem"
 
 
-# Build the database connection URL safely
+# Build database connection URL
 DATABASE_URL = URL.create(
     drivername="mysql+pymysql",
-    username=DB_USER,
-    password=DB_PASSWORD,
-    host=DB_HOST,
-    port=DB_PORT,
-    database=DB_NAME,
+    username=settings.DB_USER,
+    password=settings.DB_PASSWORD,
+    host=settings.DB_HOST,
+    port=settings.DB_PORT,
+    database=settings.DB_NAME,
 )
 
 

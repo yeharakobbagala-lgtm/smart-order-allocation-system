@@ -5,13 +5,14 @@ from logging.config import fileConfig
 from alembic import context
 
 
+
 BASE_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BASE_DIR))
 
 
 from app.database.base import Base
 from app.database.connection import engine
-from app.models.user import User
+import app.models
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
