@@ -1,14 +1,16 @@
-import { AdminShell } from "@/components/layout/admin-shell";
-import { RequireAuth } from "@/components/require-auth";
+"use client";
 
-export default function AdminLayout({
+import { AdminGuard } from "@/components/admin-guard";
+import { AdminLayout } from "@/components/AdminLayout";
+
+export default function AdminRootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <RequireAuth role="admin">
-      <AdminShell>{children}</AdminShell>
-    </RequireAuth>
+    <AdminGuard>
+      <AdminLayout>{children}</AdminLayout>
+    </AdminGuard>
   );
 }
