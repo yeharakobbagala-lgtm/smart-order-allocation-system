@@ -12,3 +12,10 @@ class ProductResponse(BaseModel):
     active: bool
 
     model_config = ConfigDict(from_attributes=True)
+
+class ProductCreate(BaseModel):
+    name: str
+    description: str | None = None
+    price: Decimal
+    image: str | None = None
+    active: bool = True
