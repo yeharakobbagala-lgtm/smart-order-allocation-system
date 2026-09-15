@@ -1,0 +1,31 @@
+So connection.py basically does 4 things:
+
+1. Gets our database configuration
+
+.env
+ ↓
+connection.py
+
+2. Sets up the MySQL connection
+
+SQLAlchemy + PyMySQL
+
+3. Configures secure communication
+
+SSL/TLS + ca.pem
+
+4. Creates the SQLAlchemy engine
+
+engine = create_engine(...)
+
+That engine will later be used by the rest of our backend to access the database.
+
+The easiest way to remember it
+
+If an interviewer asks:
+
+"What is the purpose of your connection.py?"
+
+Say:
+
+"It centralizes the database connection configuration for the application. It loads the database credentials from environment variables, configures the secure MySQL connection, and creates the SQLAlchemy engine that the rest of the backend uses to communicate with the database."
