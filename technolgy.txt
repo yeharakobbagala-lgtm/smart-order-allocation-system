@@ -1,3 +1,7 @@
 timestamp technology to cart
 pwdlib[argon2] → password security.
 PyJWT → login authentication.
+EmailStr from Pydantic.-validates that the email has a valid email format i
+Bearer" basically means:The person carrying this token is presenting it as their proof of authentication,I'm presenting this access pass
+HTTPBearer -FastAPI security helpe
+   # Prevent the system from having zero admins.
