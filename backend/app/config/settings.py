@@ -19,6 +19,8 @@ class Settings:
     DB_PASSWORD: str = os.getenv("DB_PASSWORD", "")
 
     JWT_SECRET: str = os.getenv("JWT_SECRET", "")
+    JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
+    JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "60"))
 
 
 settings = Settings()

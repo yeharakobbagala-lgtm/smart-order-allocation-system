@@ -1,1 +1,3 @@
 timestamp technology to cart
+pwdlib[argon2] → password security.
+PyJWT → login authentication.
