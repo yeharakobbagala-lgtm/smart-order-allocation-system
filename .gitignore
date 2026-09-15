@@ -14,3 +14,7 @@ node_modules/
 # Frontend build
 dist/
 .next/
+
+./node_modules/
+../next/
+.md
