@@ -327,7 +327,7 @@ export const Skeleton: React.FC<{ className?: string }> = ({ className = "" }) =
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 export const Tabs: React.FC<{ tabs: { key: string; label: string; count?: number }[]; active: string; onChange: (key: string) => void }> = ({ tabs, active, onChange }) => (
-  <div className="flex gap-1 bg-[#F1F5F9] p-1 rounded-xl">
+  <div className="flex gap-1 bg-[#F1F5F9] p-1 rounded-xl overflow-x-auto">
     {tabs.map((t) => (
       <button
         key={t.key}

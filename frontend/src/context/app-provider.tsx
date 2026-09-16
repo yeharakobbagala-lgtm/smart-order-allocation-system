@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import type { User, CartItem, Product, Order } from "@/lib/types";
 import { MOCK_ORDERS } from "@/lib/data";
 import { pageToHref } from "@/lib/navigation";
+import { setAccessToken } from "@/lib/api";
 import type { DeliveryForm } from "@/views/pages/customer/Checkout";
 import { ToastContainer, useToast } from "@/components/ui";
 
@@ -83,6 +84,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 
   const logout = useCallback(() => {
+    setAccessToken(null);
     setUser(null);
     setCart([]);
     setPendingOrderData(null);

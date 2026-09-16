@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import type { User, Page } from "@/lib/types";
 import { MOCK_USERS } from "@/lib/data";
+import { getApiBaseUrl, loginWithApi, setAccessToken } from "@/lib/api";
 import { Button, Input, Alert, IconPackage, IconEye, IconEyeOff } from "@/components/ui";
 
 // ── Login ─────────────────────────────────────────────────────────────────────
@@ -24,13 +25,35 @@ export const Login: React.FC<LoginProps> = ({ onLogin, navigate }) => {
     setError("");
     if (!email || !password) { setError("Please fill in all fields."); return; }
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 900));
+
+    if (getApiBaseUrl()) {
+      try {
+        const result = await loginWithApi(email, password);
+        setAccessToken(result.access_token);
+        const apiUser: User = {
+          id: String(result.user.id),
+          name: result.user.name,
+          email: result.user.email,
+          role: result.user.role === "admin" ? "admin" : "customer",
+          status: "active",
+          createdAt: new Date().toISOString().slice(0, 10),
+        };
+        setLoading(false);
+        onLogin(apiUser);
+        return;
+      } catch {
+        // Fall through to local demo auth when API login fails
+      }
+    }
+
+    await new Promise((r) => setTimeout(r, 400));
     const user = MOCK_USERS.find((u) => u.email === email);
     if (!user || password !== "demo123") {
       setError("Incorrect email or password. Try customer@demo.com / demo123 or admin@demo.com / demo123");
       setLoading(false);
       return;
     }
+    setAccessToken(null);
     setLoading(false);
     onLogin(user);
   };

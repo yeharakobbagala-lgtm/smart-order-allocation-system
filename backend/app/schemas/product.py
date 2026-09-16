@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ProductResponse(BaseModel):
@@ -13,9 +13,10 @@ class ProductResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 class ProductCreate(BaseModel):
-    name: str
+    name: str = Field(min_length=2, max_length=150)
     description: str | None = None
-    price: Decimal
+    price: Decimal = Field(gt=0)
     image: str | None = None
     active: bool = True

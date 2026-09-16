@@ -5,3 +5,55 @@ EmailStr from Pydantic.-validates that the email has a valid email format i
 Bearer" basically means:The person carrying this token is presenting it as their proof of authentication,I'm presenting this access pass
 HTTPBearer -FastAPI security helpe
    # Prevent the system from having zero admins.
+Google service	What we use it for
+Maps JavaScript API	Display the map
+Geocoding API	Address ↔ latitude/longitude
+Browser Geolocation	Get admin/customer's current device location
+
+1. How admin-only access works
+
+You already have this in security.py:
+
+def require_admin(
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    if current_user["role"] != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required.",
+        )
+
+    return current_user
+
+Think of it like a security guard:
+
+Request
+   ↓
+JWT token
+   ↓
+get_current_user()
+   ↓
+Who is this?
+   ↓
+require_admin()
+   ↓
+role == "admin" ?
+   ├── YES → Allow
+   └── NO  → 403 Forbidden
+
+So we don't check the role manually inside every service.
+
+For example:
+
+@router.post("/")
+def create_product(
+    data: ProductCreate,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_admin),
+):
+
+This means FastAPI will run require_admin() before your function.
+quantity: int = Field(ge=0)#never allowed negative quantity, so ge=0 (greater than or equal to 0) is used here.
+
+
+class BranchStockResponse(BaseModel):

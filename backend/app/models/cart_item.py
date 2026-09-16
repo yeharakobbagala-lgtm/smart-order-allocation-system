@@ -42,12 +42,9 @@ class CartItem(Base):
 )
         
 
-    cart: Mapped["Product"] = relationship(
-    "Cart",
-    back_populates="items"#I'm connected to Cart through its `items` property.
-)
-
     product: Mapped["Product"] = relationship(
     "Product",
-    back_populates="cart_items"#I'm connected to Product through its `cart_items` property.
+    back_populates="cart_items"
 )
+
+ 
