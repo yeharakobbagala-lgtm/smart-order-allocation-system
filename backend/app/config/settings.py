@@ -22,7 +22,7 @@ def _load_local_env_files() -> None:
     Load optional local .env files for development.
 
     Never override variables already present in the process environment
-    (Railway injects DB_* / JWT_* / CORS_ORIGINS at runtime).
+    (Railway / hosting injects DATABASE_URL, JWT_*, CORS_ORIGINS at runtime).
 
     Never load /.env — when Root Directory is /backend, parents[3] is
     the filesystem root and must not be treated as the project root.
@@ -50,14 +50,8 @@ class Settings:
     """Plain settings object — reads process environment (and optional .env)."""
 
     def __init__(self) -> None:
-        # Prefer explicit DB_* names; fall back to Railway MySQL plugin names.
-        self.DB_HOST: str = _env("DB_HOST") or _env("MYSQLHOST")
-        self.DB_PORT: int = int(
-            _env("DB_PORT") or _env("MYSQLPORT") or "3306"
-        )
-        self.DB_NAME: str = _env("DB_NAME") or _env("MYSQLDATABASE")
-        self.DB_USER: str = _env("DB_USER") or _env("MYSQLUSER")
-        self.DB_PASSWORD: str = _env("DB_PASSWORD") or _env("MYSQLPASSWORD")
+        # Supabase / PostgreSQL connection string (single source of truth)
+        self.DATABASE_URL: str = _env("DATABASE_URL")
 
         self.JWT_SECRET: str = _env("JWT_SECRET")
         self.JWT_ALGORITHM: str = _env("JWT_ALGORITHM", "HS256")

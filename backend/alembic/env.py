@@ -18,7 +18,7 @@ sys.path.insert(0, str(BASE_DIR))
 # ---------------------------------------------------------
 
 from app.database.base import Base
-from app.database.connection import engine
+from app.database.connection import DATABASE_URL, engine
 
 # Import models so Alembic can detect their tables
 from app.models.order import Order
@@ -30,6 +30,10 @@ from app.models.order_item import OrderItem
 # ---------------------------------------------------------
 
 config = context.config
+
+# Prefer the app DATABASE_URL (Supabase PostgreSQL) over alembic.ini placeholder
+if DATABASE_URL:
+    config.set_main_option("sqlalchemy.url", DATABASE_URL)
 
 
 # ---------------------------------------------------------

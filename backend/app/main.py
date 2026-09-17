@@ -52,6 +52,11 @@ app.include_router(order_router)
 
 def _redact_db_error(message: str) -> str:
     message = re.sub(
+        r"://([^:/@]+):([^@]+)@",
+        r"://\1:***@",
+        message,
+    )
+    message = re.sub(
         r"(password|passwd|pwd)\s*[:=]\s*\S+",
         r"\1=***",
         message,
@@ -81,31 +86,19 @@ def health_db():
         }
 
     repo_resolved = REPO_ROOT.resolve()
-    env_present = {
-        "DB_HOST": present("DB_HOST"),
-        "DB_PORT": present("DB_PORT"),
-        "DB_NAME": present("DB_NAME"),
-        "DB_USER": present("DB_USER"),
-        "DB_PASSWORD": present("DB_PASSWORD"),
-        "MYSQLHOST": present("MYSQLHOST"),
-    }
-    settings_nonempty = {
-        "DB_HOST": bool(settings.DB_HOST),
-        "DB_PORT": bool(settings.DB_PORT),
-        "DB_NAME": bool(settings.DB_NAME),
-        "DB_USER": bool(settings.DB_USER),
-        "DB_PASSWORD": bool(settings.DB_PASSWORD),
-    }
     meta = {
-        "env_present": env_present,
-        "settings_nonempty": settings_nonempty,
+        "env_present": {
+            "DATABASE_URL": present("DATABASE_URL"),
+        },
+        "settings_nonempty": {
+            "DATABASE_URL": bool(settings.DATABASE_URL),
+        },
         "repo_root_is_filesystem_root": repo_resolved.parent == repo_resolved,
         "backend_root_name": BACKEND_ROOT.name,
-        # Names only — helps detect mistyped Railway variable keys.
         "related_env_key_names": sorted(
             key
             for key in os.environ
-            if key.upper().startswith(("DB_", "MYSQL", "JWT", "CORS"))
+            if key.upper().startswith(("DATABASE", "JWT", "CORS", "POSTGRES"))
             or key.upper() in {"PORT", "RAILWAY_ENVIRONMENT", "RAILWAY_SERVICE_NAME"}
         ),
         "railway_service_name": os.getenv("RAILWAY_SERVICE_NAME"),

@@ -1,8 +1,12 @@
 # Python virtual environment
 backend/.venv/
+.venv/
 
-# Environment variables
+# Environment variables / secrets
 .env
+.env.*
+!.env.example
+!**/.env.example
 
 # Python cache
 __pycache__/
@@ -15,6 +19,5 @@ node_modules/
 dist/
 .next/
 
-./node_modules/
-../next/
-.md
+# Supabase CLI local cache
+supabase/.temp/
