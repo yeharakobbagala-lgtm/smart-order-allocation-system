@@ -108,6 +108,8 @@ def health_db():
             if key.upper().startswith(("DB_", "MYSQL", "JWT", "CORS"))
             or key.upper() in {"PORT", "RAILWAY_ENVIRONMENT", "RAILWAY_SERVICE_NAME"}
         ),
+        "railway_service_name": os.getenv("RAILWAY_SERVICE_NAME"),
+        "railway_environment": os.getenv("RAILWAY_ENVIRONMENT"),
     }
 
     try:
