@@ -89,6 +89,13 @@ export function mapApiOrder(
       image:
         extras?.productImages?.[item.product_id] ||
         "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=200&h=200&fit=crop&auto=format",
+      reservationType:
+        item.reservation_type === "CURRENT" ||
+        item.reservation_type === "FUTURE" ||
+        item.reservation_type === "TEMPORARY"
+          ? item.reservation_type
+          : null,
+      restockDate: item.restock_date ?? null,
     })),
     total: Number(order.total_amount),
     status,

@@ -3,6 +3,8 @@
 import React, { useState } from "react";
 import type { Order, Page } from "@/lib/types";
 import { formatCurrency } from "@/lib/currency";
+import { orderHasFutureItems } from "@/lib/fulfillment";
+import { OrderItemFulfillment } from "@/components/OrderItemFulfillment";
 import { Button, Card, StatusBadge, OrderTimeline, Modal, Alert, IconArrowLeft, IconMapPin, IconCalendar, IconBranch } from "@/components/ui";
 
 interface Props {
@@ -53,6 +55,11 @@ export const OrderDetails: React.FC<Props> = ({ order, navigate, onCancelOrder }
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {displayStatus !== "CANCELLED" && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-[#ECFDF5] text-[#065F46]">
+              Confirmed
+            </span>
+          )}
           <StatusBadge status={displayStatus} />
           <StatusBadge status={order.paymentStatus} />
           {canCancel(displayStatus) && onCancelOrder && (
@@ -109,17 +116,19 @@ export const OrderDetails: React.FC<Props> = ({ order, navigate, onCancelOrder }
       <Card className="overflow-hidden mb-5">
         <div className="px-5 py-4 border-b border-[#E2E8F0]">
           <h2 className="font-display font-bold text-[#0F172A]">Order Items</h2>
+          {displayStatus !== "CANCELLED" && orderHasFutureItems(order) && (
+            <p className="text-xs text-[#92400E] mt-1">
+              Some items are confirmed and awaiting restock. Details per item below.
+            </p>
+          )}
         </div>
-        <div className="divide-y divide-[#F1F5F9]">
+        <div className="divide-y divide-[#F1F5F9] px-5">
           {order.items.map((item) => (
-            <div key={item.productId} className="flex items-center gap-3 px-5 py-4">
-              <img src={item.image} alt={item.productName} className="w-14 h-14 rounded-xl object-cover bg-[#F1F5F9] shrink-0" />
-              <div className="flex-1">
-                <p className="font-medium text-[#0F172A] text-sm">{item.productName}</p>
-                <p className="text-xs text-[#94A3B8]">{formatCurrency(item.price)} × {item.quantity}</p>
-              </div>
-              <p className="font-display font-bold text-[#0F172A]">{formatCurrency(item.price * item.quantity)}</p>
-            </div>
+            <OrderItemFulfillment
+              key={item.productId}
+              order={order}
+              item={item}
+            />
           ))}
         </div>
         <div className="px-5 py-4 bg-[#F8FAFC] border-t border-[#E2E8F0] flex justify-between font-display font-bold text-xl text-[#0F172A]">

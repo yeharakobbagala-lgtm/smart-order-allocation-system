@@ -16,6 +16,7 @@ from app.services.checkout_service import (
     confirm_checkout_hold,
     create_checkout_hold,
 )
+from app.services.order_response import build_order_response
 
 from app.utils.security import get_current_user
 
@@ -104,8 +105,9 @@ def confirm_checkout(
     then clears the cart.
     """
 
-    return confirm_checkout_hold(
+    order = confirm_checkout_hold(
         db=db,
         user_id=current_user["user_id"],
         hold_id=data.hold_id,
     )
+    return build_order_response(db, order)

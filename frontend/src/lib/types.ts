@@ -47,6 +47,10 @@ export interface OrderItem {
   price: number;
   quantity: number;
   image: string;
+  /** From API when present: CURRENT | FUTURE | TEMPORARY */
+  reservationType?: "TEMPORARY" | "CURRENT" | "FUTURE" | null;
+  /** Restock date from API when item is FUTURE */
+  restockDate?: string | null;
 }
 
 export interface AllocationDecision {

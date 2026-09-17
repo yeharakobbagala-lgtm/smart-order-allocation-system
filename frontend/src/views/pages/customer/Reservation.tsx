@@ -9,7 +9,6 @@ import {
   Card,
   Alert,
   CountdownTimer,
-  IconCheck,
   IconArrowLeft,
 } from "@/components/ui";
 import {
@@ -105,12 +104,14 @@ export const Reservation: React.FC<Props> = ({
           Order Reservation
         </h1>
 
-        <div className="flex justify-center mb-6">
-          <div className="inline-flex items-center gap-2 bg-[#ECFDF5] text-[#065F46] px-4 py-1.5 rounded-full text-sm font-medium">
-            <IconCheck size={14} />
-            Stock temporarily reserved
+        <div className="flex justify-center mb-2">
+          <div className="inline-flex items-center gap-2 bg-[#FFFBEB] text-[#92400E] px-4 py-1.5 rounded-full text-sm font-medium border border-[#FDE68A]">
+            Temporarily Reserved
           </div>
         </div>
+        <p className="text-center text-sm text-[#64748B] mb-6">
+          Complete your order within 10 minutes.
+        </p>
 
         <div className="space-y-5 text-sm">
           <div>
@@ -180,7 +181,7 @@ export const Reservation: React.FC<Props> = ({
 
         <div className="text-center mb-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-[#94A3B8] mb-3">
-            Reservation
+            Temporary Reservation
           </p>
           <p className="text-sm text-[#64748B] mb-3">⏳ Reserved for you</p>
           <div className="flex justify-center mb-3">
@@ -196,7 +197,8 @@ export const Reservation: React.FC<Props> = ({
             </span>
           </p>
           <p className="text-xs text-[#94A3B8] mt-2">
-            Your stock is held for 10 minutes.
+            Stock is held temporarily for 10 minutes. Confirm before expiry —
+            no order is created until you confirm.
           </p>
         </div>
 
@@ -210,14 +212,19 @@ export const Reservation: React.FC<Props> = ({
             {hold.items.map((item) => (
               <div
                 key={item.reservation_id}
-                className="flex justify-between gap-3 text-sm"
+                className="rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5"
               >
-                <span className="text-[#0F172A]">
-                  {item.product_name} × {item.quantity}
-                </span>
-                <span className="font-medium text-[#0F172A] shrink-0">
-                  {formatCurrency(Number(item.line_total))}
-                </span>
+                <div className="flex justify-between gap-3 text-sm">
+                  <span className="text-[#0F172A] font-medium">
+                    {item.product_name} × {item.quantity}
+                  </span>
+                  <span className="font-medium text-[#0F172A] shrink-0">
+                    {formatCurrency(Number(item.line_total))}
+                  </span>
+                </div>
+                <p className="text-xs text-[#92400E] mt-1">
+                  Temporarily Reserved · Reserved for you
+                </p>
               </div>
             ))}
           </div>

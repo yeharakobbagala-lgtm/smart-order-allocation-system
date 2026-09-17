@@ -3,6 +3,10 @@
 import React, { useState } from "react";
 import type { Order, Page } from "@/lib/types";
 import { formatCurrency } from "@/lib/currency";
+import {
+  orderHasFutureItems,
+  resolveItemFulfillmentType,
+} from "@/lib/fulfillment";
 import { Card, StatusBadge, EmptyState, IconPackage, IconChevronRight } from "@/components/ui";
 
 interface Props {
@@ -90,9 +94,41 @@ export const MyOrders: React.FC<Props> = ({ orders, navigate }) => {
                       {order.items.length === 1 ? order.items[0].productName : `${order.items[0].productName} +${order.items.length - 1} more`}
                     </p>
                     <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                      {order.status !== "CANCELLED" && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-[#ECFDF5] text-[#065F46]">
+                          Confirmed
+                        </span>
+                      )}
                       <StatusBadge status={order.status} />
                       <StatusBadge status={order.paymentStatus} />
                     </div>
+                    {order.status !== "CANCELLED" && (
+                      <div className="mt-2 space-y-0.5">
+                        {order.items.map((item) => {
+                          const fulfillment = resolveItemFulfillmentType(
+                            item,
+                            order
+                          );
+                          return (
+                            <p
+                              key={item.productId}
+                              className="text-xs text-[#64748B]"
+                            >
+                              {item.productName} ×{item.quantity}
+                              {" · "}
+                              {fulfillment === "FUTURE"
+                                ? "⏳ Awaiting Restock"
+                                : "✓ Current stock"}
+                            </p>
+                          );
+                        })}
+                        {orderHasFutureItems(order) && (
+                          <p className="text-xs text-[#92400E]">
+                            Order confirmed — some items await restock
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="text-right flex flex-col items-end gap-1">

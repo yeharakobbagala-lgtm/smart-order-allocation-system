@@ -292,6 +292,8 @@ export interface ApiOrderItem {
   product_id: number;
   quantity: number;
   unit_price: number | string;
+  reservation_type?: string | null;
+  restock_date?: string | null;
 }
 
 export interface ApiOrder {

@@ -3,6 +3,8 @@
 import React from "react";
 import type { Order, Page } from "@/lib/types";
 import { formatCurrency } from "@/lib/currency";
+import { orderHasFutureItems } from "@/lib/fulfillment";
+import { OrderItemFulfillment } from "@/components/OrderItemFulfillment";
 import { Button, Card, StatusBadge, IconCheck, IconChevronRight } from "@/components/ui";
 
 interface Props {
@@ -11,6 +13,8 @@ interface Props {
 }
 
 export const OrderConfirmation: React.FC<Props> = ({ order, navigate }) => {
+  const hasFuture = orderHasFutureItems(order);
+
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 py-12">
       {/* Success Banner */}
@@ -35,7 +39,12 @@ export const OrderConfirmation: React.FC<Props> = ({ order, navigate }) => {
           </div>
           <div>
             <p className="text-xs text-[#94A3B8]">Status</p>
-            <div className="mt-0.5"><StatusBadge status={order.status} /></div>
+            <div className="mt-0.5 flex flex-wrap gap-1.5">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-[#ECFDF5] text-[#065F46]">
+                Confirmed
+              </span>
+              <StatusBadge status={order.status} />
+            </div>
           </div>
           <div>
             <p className="text-xs text-[#94A3B8]">Fulfillment Branch</p>
@@ -55,14 +64,22 @@ export const OrderConfirmation: React.FC<Props> = ({ order, navigate }) => {
           </div>
         </div>
 
+        {hasFuture && (
+          <div className="mb-4 rounded-xl border border-[#FDE68A] bg-[#FFFBEB] px-3 py-2.5 text-xs text-[#92400E]">
+            This confirmed order includes one or more items awaiting restock.
+            Item-level status is shown below.
+          </div>
+        )}
+
         <div className="border-t border-[#E2E8F0] pt-4 mb-4">
-          <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wider mb-3">Items</p>
-          <div className="space-y-2">
+          <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wider mb-1">Items</p>
+          <div className="divide-y divide-[#F1F5F9]">
             {order.items.map((item) => (
-              <div key={item.productId} className="flex justify-between text-sm">
-                <span className="text-[#64748B]">{item.productName} ×{item.quantity}</span>
-                <span className="font-medium text-[#0F172A]">{formatCurrency(item.price * item.quantity)}</span>
-              </div>
+              <OrderItemFulfillment
+                key={item.productId}
+                order={order}
+                item={item}
+              />
             ))}
           </div>
         </div>

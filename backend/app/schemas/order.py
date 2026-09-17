@@ -65,6 +65,10 @@ class OrderItemResponse(BaseModel):
     product_id: int
     quantity: int
     unit_price: Decimal
+    # Existing stock_reservations.reservation_type for this order line (read-only)
+    reservation_type: str | None = None
+    # Branch stock restock_date when reservation_type is FUTURE (read-only)
+    restock_date: datetime | None = None
 
     model_config = ConfigDict(
         from_attributes=True
