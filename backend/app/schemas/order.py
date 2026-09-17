@@ -99,6 +99,17 @@ class OrderResponse(BaseModel):
 
     estimated_delivery_date: datetime | None
 
+    # Allocation snapshot (null on orders created before snapshot support)
+    allocation_distance_km: float | None = None
+    allocation_travel_time_hours: float | None = None
+    allocation_stock_wait_hours: float | None = None
+    allocation_processing_time_hours: float | None = None
+    allocation_eta_hours: float | None = None
+    allocation_workload_percentage: float | None = None
+    allocation_eta_score: float | None = None
+    allocation_workload_score: float | None = None
+    allocation_final_score: float | None = None
+
     created_at: datetime
     updated_at: datetime
 

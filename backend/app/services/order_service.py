@@ -20,7 +20,10 @@ from app.services.stock_reservation_service import (
     get_available_physical_stock,
     get_remaining_restock_quantity,
 )
-from app.utils.allocation import calculate_stock_wait
+from app.utils.allocation import (
+    calculate_processing_time,
+    calculate_stock_wait,
+)
 
 
 def create_order(
@@ -64,6 +67,11 @@ def create_order(
 
     branch_id = selected_branch["branch_id"]
 
+    # Snapshot processing time using the same constant as allocate_order / ETA
+    processing_time_hours = (
+        calculate_processing_time().total_seconds() / 3600
+    )
+
     # 3. Calculate total
     total_amount = Decimal("0.00")
 
@@ -73,7 +81,7 @@ def create_order(
         )
 
     try:
-        # 4. Create order
+        # 4. Create order (persist allocation snapshot from selected_branch)
         order = Order(
             user_id=user_id,
             branch_id=branch_id,
@@ -87,6 +95,23 @@ def create_order(
             total_amount=total_amount,
             payment_method=payment_method,
             payment_status="PENDING",
+            allocation_distance_km=selected_branch["distance_km"],
+            allocation_travel_time_hours=selected_branch[
+                "travel_time_hours"
+            ],
+            allocation_stock_wait_hours=selected_branch[
+                "stock_wait_hours"
+            ],
+            allocation_processing_time_hours=processing_time_hours,
+            allocation_eta_hours=selected_branch["eta_hours"],
+            allocation_workload_percentage=selected_branch[
+                "workload_percentage"
+            ],
+            allocation_eta_score=selected_branch["eta_score"],
+            allocation_workload_score=selected_branch[
+                "workload_score"
+            ],
+            allocation_final_score=selected_branch["final_score"],
         )
 
         db.add(order)

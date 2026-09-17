@@ -17,6 +17,7 @@ from app.routers import (
 from app.routers.cart import router as cart_router
 from app.routers.stock_reservation import router as stock_reservation_router
 from app.routers.order import router as order_router
+from app.routers.checkout import router as checkout_router
 
 app = FastAPI(
     title="Smart Order Allocation System",
@@ -48,6 +49,7 @@ app.include_router(branch_stock_router.router)
 app.include_router(cart_router)
 app.include_router(stock_reservation_router)
 app.include_router(order_router)
+app.include_router(checkout_router)
 
 
 def _redact_db_error(message: str) -> str:

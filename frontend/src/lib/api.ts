@@ -309,6 +309,15 @@ export interface ApiOrder {
   payment_method: string;
   payment_status: string;
   estimated_delivery_date: string | null;
+  allocation_distance_km: number | null;
+  allocation_travel_time_hours: number | null;
+  allocation_stock_wait_hours: number | null;
+  allocation_processing_time_hours: number | null;
+  allocation_eta_hours: number | null;
+  allocation_workload_percentage: number | null;
+  allocation_eta_score: number | null;
+  allocation_workload_score: number | null;
+  allocation_final_score: number | null;
   created_at: string;
   updated_at: string;
   order_items: ApiOrderItem[];
@@ -326,6 +335,61 @@ export function createOrder(payload: {
   return apiFetch<ApiOrder>(
     "/orders/",
     { method: "POST", body: JSON.stringify(payload) },
+    true
+  );
+}
+
+/* ── Checkout hold / confirm ─────────────────────────── */
+
+export interface ApiCheckoutHoldItem {
+  product_id: number;
+  product_name: string;
+  quantity: number;
+  unit_price: number | string;
+  line_total: number | string;
+  reservation_id: number;
+}
+
+export interface ApiCheckoutHold {
+  hold_id: number;
+  branch_id: number;
+  branch_name: string;
+  distance_km: number;
+  travel_time_hours: number;
+  stock_wait_hours: number;
+  processing_time_hours: number;
+  eta_hours: number;
+  estimated_delivery_date: string;
+  estimated_delivery_end: string;
+  reservation_ids: number[];
+  expires_at: string;
+  items: ApiCheckoutHoldItem[];
+  subtotal: number | string;
+  delivery: number | string;
+  total: number | string;
+  status: string;
+}
+
+export function createCheckoutHold(payload: {
+  customer_name: string;
+  phone: string;
+  delivery_address: string;
+  latitude: number;
+  longitude: number;
+  order_note?: string | null;
+  payment_method?: string;
+}) {
+  return apiFetch<ApiCheckoutHold>(
+    "/checkout/hold",
+    { method: "POST", body: JSON.stringify(payload) },
+    true
+  );
+}
+
+export function confirmCheckoutHold(holdId: number) {
+  return apiFetch<ApiOrder>(
+    "/checkout/confirm",
+    { method: "POST", body: JSON.stringify({ hold_id: holdId }) },
     true
   );
 }

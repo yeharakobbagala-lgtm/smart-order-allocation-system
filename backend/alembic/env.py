@@ -23,6 +23,7 @@ from app.database.connection import DATABASE_URL, engine
 # Import models so Alembic can detect their tables
 from app.models.order import Order
 from app.models.order_item import OrderItem
+from app.models.checkout_hold import CheckoutHold
 
 
 # ---------------------------------------------------------

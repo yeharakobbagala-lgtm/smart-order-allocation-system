@@ -85,8 +85,8 @@ export const AdminStock: React.FC = () => {
     // Merge into existing state — never replace the full list with a partial
     // subset (that drops stock IDs and causes edit to POST instead of PUT).
     setStock((prev) => {
-      const byKey = new Map(
-        updated.map((r) => [`${r.branchId}:${r.productId}`, r] as const)
+      const byKey = new Map<string, (typeof updated)[number]>(
+        updated.map((r) => [`${r.branchId}:${r.productId}`, r])
       );
       const merged = prev.map((r) => {
         const key = `${r.branchId}:${r.productId}`;

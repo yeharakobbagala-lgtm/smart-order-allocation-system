@@ -52,11 +52,16 @@ export interface OrderItem {
 export interface AllocationDecision {
   branchId: string;
   branchName: string;
-  distanceKm: number;
-  distanceScore: number;
-  workloadScore: number;
-  finalScore: number;
-  distanceWeight: number;
+  distanceKm: number | null;
+  travelTimeHours: number | null;
+  stockWaitHours: number | null;
+  processingTimeHours: number | null;
+  etaHours: number | null;
+  workloadPercentage: number | null;
+  etaScore: number | null;
+  workloadScore: number | null;
+  finalScore: number | null;
+  etaWeight: number;
   workloadWeight: number;
 }
 

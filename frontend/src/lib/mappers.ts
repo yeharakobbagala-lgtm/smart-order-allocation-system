@@ -104,11 +104,17 @@ export function mapApiOrder(
       branchName:
         extras?.branchName ||
         (order.branch_id != null ? `Branch #${order.branch_id}` : "Pending"),
-      distanceKm: 0,
-      distanceScore: 0,
-      workloadScore: 0,
-      finalScore: 0,
-      distanceWeight: 0.6,
+      distanceKm: order.allocation_distance_km ?? null,
+      travelTimeHours: order.allocation_travel_time_hours ?? null,
+      stockWaitHours: order.allocation_stock_wait_hours ?? null,
+      processingTimeHours: order.allocation_processing_time_hours ?? null,
+      etaHours: order.allocation_eta_hours ?? null,
+      workloadPercentage: order.allocation_workload_percentage ?? null,
+      etaScore: order.allocation_eta_score ?? null,
+      workloadScore: order.allocation_workload_score ?? null,
+      finalScore: order.allocation_final_score ?? null,
+      // Weights match calculate_final_score in the allocation algorithm
+      etaWeight: 0.6,
       workloadWeight: 0.4,
     },
   };

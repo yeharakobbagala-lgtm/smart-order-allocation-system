@@ -81,6 +81,52 @@ class Order(Base):
         nullable=True
     )
 
+    # Allocation snapshot (captured at order creation; not recomputed later)
+    allocation_distance_km: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    allocation_travel_time_hours: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    allocation_stock_wait_hours: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    allocation_processing_time_hours: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    allocation_eta_hours: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    allocation_workload_percentage: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    allocation_eta_score: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    allocation_workload_score: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    allocation_final_score: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=datetime.utcnow

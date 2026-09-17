@@ -367,14 +367,20 @@ export const Divider: React.FC<{ className?: string }> = ({ className = "" }) =>
 );
 
 // ── Score Bar ─────────────────────────────────────────────────────────────────
-export const ScoreBar: React.FC<{ value: number; max?: number; color?: string }> = ({ value, max = 1, color = "#4F46E5" }) => (
-  <div className="flex items-center gap-2">
-    <div className="flex-1 h-2 bg-[#F1F5F9] rounded-full overflow-hidden">
-      <div className="h-full rounded-full transition-all" style={{ width: `${(value / max) * 100}%`, backgroundColor: color }} />
+export const ScoreBar: React.FC<{ value: number; max?: number; color?: string }> = ({ value, max = 100, color = "#4F46E5" }) => {
+  const safeMax = max > 0 ? max : 100;
+  const clamped = Math.max(0, Math.min(safeMax, value));
+  const pct = (clamped / safeMax) * 100;
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex-1 h-2 bg-[#F1F5F9] rounded-full overflow-hidden">
+        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
+      </div>
+      <span className="font-mono-data text-xs text-[#64748B] w-10 text-right">{clamped.toFixed(0)}</span>
     </div>
-    <span className="font-mono-data text-xs text-[#64748B] w-8 text-right">{(value * 100).toFixed(0)}%</span>
-  </div>
-);
+  );
+};
 
 // ── Quantity Selector ─────────────────────────────────────────────────────────
 export const QuantitySelector: React.FC<{ value: number; onChange: (v: number) => void; min?: number; max?: number }> = ({ value, onChange, min = 1, max = 99 }) => (

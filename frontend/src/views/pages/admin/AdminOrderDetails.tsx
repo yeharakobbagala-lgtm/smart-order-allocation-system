@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import type { Order, OrderStatus, Page } from "@/lib/types";
-import { Button, Card, StatusBadge, Badge, ScoreBar, Alert, Select, IconArrowLeft, IconMapPin, IconBranch, IconCalendar } from "@/components/ui";
+import { Button, Card, StatusBadge, Badge, ScoreBar, Alert, Select, IconArrowLeft, IconMapPin, IconBranch } from "@/components/ui";
 
 interface Props {
   order: Order;
@@ -18,14 +18,29 @@ const STATUS_OPTIONS: OrderStatus[] = [
   "CANCELLED",
 ];
 
+function formatHours(value: number | null): string {
+  if (value == null || Number.isNaN(value)) return "—";
+  if (value < 1) return `${(value * 60).toFixed(0)} min`;
+  if (value < 48) return `${value.toFixed(1)} h`;
+  return `${(value / 24).toFixed(1)} days`;
+}
+
+function formatNumber(value: number | null, digits = 2): string {
+  if (value == null || Number.isNaN(value)) return "—";
+  return value.toFixed(digits);
+}
+
 export const AdminOrderDetails: React.FC<Props> = ({ order, navigate, onStatusChange }) => {
   const [status, setStatus] = useState<OrderStatus>(order.status);
   const [saving, setSaving] = useState(false);
   const [statusError, setStatusError] = useState("");
   const { allocation: alloc } = order;
-  const distancePct = alloc.distanceScore;
-  const workloadPct = alloc.workloadScore;
-  const finalPct = alloc.finalScore;
+
+  const etaScore = alloc.etaScore;
+  const workloadScore = alloc.workloadScore;
+  const finalScore = alloc.finalScore;
+  const hasSnapshot =
+    etaScore != null || workloadScore != null || finalScore != null;
 
   return (
     <div className="space-y-6">
@@ -113,7 +128,9 @@ export const AdminOrderDetails: React.FC<Props> = ({ order, navigate, onStatusCh
               <div className="bg-[#F8FAFC] rounded-xl p-3 border border-[#E2E8F0]">
                 <p className="text-xs text-[#94A3B8]">Estimated Delivery</p>
                 <p className="text-sm font-medium text-[#10B981] mt-0.5">
-                  {new Date(order.estimatedDelivery).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  {order.estimatedDelivery
+                    ? new Date(order.estimatedDelivery).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                    : "—"}
                 </p>
               </div>
             </div>
@@ -158,40 +175,90 @@ export const AdminOrderDetails: React.FC<Props> = ({ order, navigate, onStatusCh
             <div className="bg-[#ECFDF5] border border-[#A7F3D0] rounded-xl p-3 mb-5">
               <p className="text-xs text-[#047857] font-medium">Selected Branch</p>
               <p className="font-display font-bold text-[#065F46]">{alloc.branchName}</p>
-              <p className="text-xs text-[#047857] mt-0.5">{alloc.distanceKm} km from customer</p>
             </div>
 
-            <div className="space-y-4">
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-semibold text-[#334155]">Distance Score</span>
-                  <Badge variant="default">{(alloc.distanceWeight * 100).toFixed(0)}% weight</Badge>
+            {!hasSnapshot ? (
+              <p className="text-xs text-[#94A3B8]">
+                No allocation snapshot was stored for this order (created before snapshot support).
+              </p>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3 mb-5 text-sm">
+                  <div className="bg-[#F8FAFC] rounded-xl p-3 border border-[#E2E8F0]">
+                    <p className="text-xs text-[#94A3B8]">Road Distance</p>
+                    <p className="font-medium text-[#0F172A] mt-0.5">
+                      {alloc.distanceKm != null ? `${formatNumber(alloc.distanceKm, 1)} km` : "—"}
+                    </p>
+                  </div>
+                  <div className="bg-[#F8FAFC] rounded-xl p-3 border border-[#E2E8F0]">
+                    <p className="text-xs text-[#94A3B8]">Travel Time</p>
+                    <p className="font-medium text-[#0F172A] mt-0.5">{formatHours(alloc.travelTimeHours)}</p>
+                  </div>
+                  <div className="bg-[#F8FAFC] rounded-xl p-3 border border-[#E2E8F0]">
+                    <p className="text-xs text-[#94A3B8]">Stock Wait</p>
+                    <p className="font-medium text-[#0F172A] mt-0.5">{formatHours(alloc.stockWaitHours)}</p>
+                  </div>
+                  <div className="bg-[#F8FAFC] rounded-xl p-3 border border-[#E2E8F0]">
+                    <p className="text-xs text-[#94A3B8]">Processing Time</p>
+                    <p className="font-medium text-[#0F172A] mt-0.5">{formatHours(alloc.processingTimeHours)}</p>
+                  </div>
+                  <div className="bg-[#F8FAFC] rounded-xl p-3 border border-[#E2E8F0]">
+                    <p className="text-xs text-[#94A3B8]">Expected ETA</p>
+                    <p className="font-medium text-[#0F172A] mt-0.5">{formatHours(alloc.etaHours)}</p>
+                  </div>
+                  <div className="bg-[#F8FAFC] rounded-xl p-3 border border-[#E2E8F0]">
+                    <p className="text-xs text-[#94A3B8]">Workload Percentage</p>
+                    <p className="font-medium text-[#0F172A] mt-0.5">
+                      {alloc.workloadPercentage != null
+                        ? `${formatNumber(alloc.workloadPercentage, 1)}%`
+                        : "—"}
+                    </p>
+                  </div>
                 </div>
-                <ScoreBar value={distancePct} color="#4F46E5" />
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-semibold text-[#334155]">Workload Score</span>
-                  <Badge variant="success">{(alloc.workloadWeight * 100).toFixed(0)}% weight</Badge>
-                </div>
-                <ScoreBar value={workloadPct} color="#10B981" />
-              </div>
-              <div className="border-t border-[#E2E8F0] pt-3">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-bold text-[#0F172A]">Final Score</span>
-                  <span className="font-mono-data text-xs font-bold text-[#4F46E5]">{finalPct.toFixed(2)}</span>
-                </div>
-                <ScoreBar value={finalPct} color="#4F46E5" />
-              </div>
-            </div>
 
-            <div className="mt-4 bg-[#F8FAFC] rounded-xl p-3 border border-[#E2E8F0] text-xs text-[#64748B]">
-              <p className="font-medium text-[#334155] mb-1">Formula</p>
-              <code className="font-mono-data text-[#4F46E5]">
-                {distancePct.toFixed(2)} × 0.60 + {workloadPct.toFixed(2)} × 0.40 = <strong>{finalPct.toFixed(2)}</strong>
-              </code>
-              <p className="mt-2 text-[#94A3B8]">Stock availability is a hard eligibility requirement — only branches with sufficient stock were evaluated.</p>
-            </div>
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-semibold text-[#334155]">ETA Score</span>
+                      <Badge variant="default">{(alloc.etaWeight * 100).toFixed(0)}% weight</Badge>
+                    </div>
+                    <ScoreBar value={etaScore ?? 0} color="#4F46E5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-semibold text-[#334155]">Workload Score</span>
+                      <Badge variant="success">{(alloc.workloadWeight * 100).toFixed(0)}% weight</Badge>
+                    </div>
+                    <ScoreBar value={workloadScore ?? 0} color="#10B981" />
+                  </div>
+                  <div className="border-t border-[#E2E8F0] pt-3">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-bold text-[#0F172A]">Final Score</span>
+                      <span className="font-mono-data text-xs font-bold text-[#4F46E5]">
+                        {formatNumber(finalScore, 2)}
+                      </span>
+                    </div>
+                    <ScoreBar value={finalScore ?? 0} color="#4F46E5" />
+                  </div>
+                </div>
+
+                <div className="mt-4 bg-[#F8FAFC] rounded-xl p-3 border border-[#E2E8F0] text-xs text-[#64748B]">
+                  <p className="font-medium text-[#334155] mb-1">Formula</p>
+                  {etaScore != null && workloadScore != null && finalScore != null ? (
+                    <code className="font-mono-data text-[#4F46E5]">
+                      {etaScore.toFixed(2)} × {alloc.etaWeight.toFixed(2)} +{" "}
+                      {workloadScore.toFixed(2)} × {alloc.workloadWeight.toFixed(2)} ={" "}
+                      <strong>{finalScore.toFixed(2)}</strong>
+                    </code>
+                  ) : (
+                    <span>—</span>
+                  )}
+                  <p className="mt-2 text-[#94A3B8]">
+                    Stock availability is a hard eligibility requirement — only branches with sufficient stock were evaluated.
+                  </p>
+                </div>
+              </>
+            )}
           </Card>
 
           {/* Payment */}

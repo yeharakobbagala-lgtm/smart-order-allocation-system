@@ -175,7 +175,8 @@ export const Checkout: React.FC<Props> = ({
           <Card className="p-6">
             <h2 className="font-display font-bold text-[#0F172A] mb-2">Branch Allocation</h2>
             <p className="text-sm text-[#64748B] mb-5">
-              When you place the order, our system automatically finds the best branch based on your location, stock availability, and branch workload.
+              We&apos;ll find the best branch, reserve stock for 10 minutes, then
+              show you a preview before you confirm the order.
             </p>
             <AllocationWidget state={allocationState} />
             {submitError && allocationState !== "error" && (
@@ -190,7 +191,7 @@ export const Checkout: React.FC<Props> = ({
               className="w-full mt-4"
               iconRight={<IconChevronRight size={16} />}
             >
-              Place Order
+              Allocate &amp; Reserve
             </Button>
           </Card>
         </div>
