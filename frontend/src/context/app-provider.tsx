@@ -4,48 +4,59 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
-import type { User, CartItem, Product, Order } from "@/lib/types";
-import { MOCK_ORDERS } from "@/lib/data";
+import type { User, CartItem, Product, Order, Page } from "@/lib/types";
 import { pageToHref } from "@/lib/navigation";
-import { setAccessToken } from "@/lib/api";
+import {
+  addCartItem,
+  cancelOrder as apiCancelOrder,
+  createOrder,
+  fetchCart,
+  fetchCurrentUser,
+  fetchMyOrder,
+  fetchMyOrders,
+  getAccessToken,
+  removeCartItem,
+  setAccessToken,
+  setStoredUser,
+  getStoredUser,
+  updateCartItem,
+  ApiError,
+} from "@/lib/api";
+import { mapApiCart, mapApiUser } from "@/lib/mappers";
+import { enrichApiOrders } from "@/lib/order-enrichment";
 import type { DeliveryForm } from "@/views/pages/customer/Checkout";
 import { ToastContainer, useToast } from "@/components/ui";
 
-interface PendingOrderData {
-  form: DeliveryForm;
-  branchId: string;
-  branchName: string;
-  estimatedDelivery: string;
-}
-
 interface AppContextValue {
   user: User | null;
+  authLoading: boolean;
   cart: CartItem[];
+  cartLoading: boolean;
   orders: Order[];
-  pendingOrderData: PendingOrderData | null;
   confirmedOrder: Order | null;
   login: (user: User) => void;
   logout: () => void;
-  addToCart: (product: Product, qty: number) => void;
-  updateQty: (productId: string, qty: number) => void;
-  removeFromCart: (productId: string) => void;
-  checkoutPlaceOrder: (
-    form: DeliveryForm,
-    branchId: string,
-    branchName: string,
-    estimatedDelivery: string
-  ) => void;
-  reservationConfirm: () => void;
-  placeOrderConfirm: () => Order | null;
+  refreshCart: () => Promise<void>;
+  refreshOrders: () => Promise<void>;
+  addToCart: (product: Product, qty: number) => Promise<void>;
+  updateQty: (cartItemId: string, qty: number) => Promise<void>;
+  removeFromCart: (cartItemId: string) => Promise<void>;
+  placeOrder: (form: DeliveryForm) => Promise<Order>;
+  cancelCustomerOrder: (orderId: string) => Promise<void>;
+  loadOrder: (orderId: string) => Promise<Order | null>;
   setConfirmedOrder: (order: Order | null) => void;
   customerOrders: Order[];
   getOrderById: (id: string) => Order | undefined;
-  navigate: (page: import("@/lib/types").Page, id?: string) => void;
-  addToast: (message: string, type?: "success" | "error" | "info" | "warning") => void;
+  navigate: (page: Page, id?: string) => void;
+  addToast: (
+    message: string,
+    type?: "success" | "error" | "info" | "warning"
+  ) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -53,15 +64,15 @@ const AppContext = createContext<AppContextValue | null>(null);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [orders, setOrders] = useState<Order[]>(MOCK_ORDERS);
-  const [pendingOrderData, setPendingOrderData] =
-    useState<PendingOrderData | null>(null);
+  const [cartLoading, setCartLoading] = useState(false);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
   const { toasts, add: addToast, remove: removeToast } = useToast();
 
   const navigate = useCallback(
-    (page: import("@/lib/types").Page, id?: string) => {
+    (page: Page, id?: string) => {
       router.push(pageToHref(page, id));
       if (typeof window !== "undefined") {
         window.scrollTo({ top: 0, behavior: "smooth" });
@@ -70,149 +81,242 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [router]
   );
 
+  const refreshCart = useCallback(async () => {
+    if (!getAccessToken()) {
+      setCart([]);
+      return;
+    }
+    setCartLoading(true);
+    try {
+      const data = await fetchCart();
+      setCart(mapApiCart(data));
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setCart([]);
+      }
+    } finally {
+      setCartLoading(false);
+    }
+  }, []);
+
+  const refreshOrders = useCallback(async () => {
+    if (!getAccessToken()) {
+      setOrders([]);
+      return;
+    }
+    try {
+      const data = await fetchMyOrders();
+      setOrders(await enrichApiOrders(data));
+    } catch {
+      /* keep existing */
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function hydrate() {
+      const token = getAccessToken();
+      if (!token) {
+        setAuthLoading(false);
+        return;
+      }
+      try {
+        const me = await fetchCurrentUser();
+        if (cancelled) return;
+        const mapped = mapApiUser(me);
+        setUser(mapped);
+        setStoredUser(mapped);
+        await Promise.all([refreshCart(), refreshOrders()]);
+      } catch {
+        if (cancelled) return;
+        setAccessToken(null);
+        setStoredUser(null);
+        setUser(null);
+      } finally {
+        if (!cancelled) setAuthLoading(false);
+      }
+    }
+    const cached = getStoredUser<User>();
+    if (cached && getAccessToken()) setUser(cached);
+    void hydrate();
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshCart, refreshOrders]);
+
   const login = useCallback(
     (loggedUser: User) => {
       setUser(loggedUser);
-      if (loggedUser.role === "admin") {
-        router.push("/admin");
-      } else {
-        router.push("/products");
-      }
+      setStoredUser(loggedUser);
+      void refreshCart();
+      void refreshOrders();
+      if (loggedUser.role === "admin") router.push("/admin");
+      else router.push("/products");
       addToast(`Welcome back, ${loggedUser.name.split(" ")[0]}!`, "success");
     },
-    [addToast, router]
+    [addToast, refreshCart, refreshOrders, router]
   );
 
   const logout = useCallback(() => {
     setAccessToken(null);
+    setStoredUser(null);
     setUser(null);
     setCart([]);
-    setPendingOrderData(null);
+    setOrders([]);
+    setConfirmedOrder(null);
     router.push("/");
   }, [router]);
 
   const addToCart = useCallback(
-    (product: Product, qty: number) => {
-      setCart((prev) => {
-        const existing = prev.find((i) => i.product.id === product.id);
-        if (existing) {
-          return prev.map((i) =>
-            i.product.id === product.id
-              ? { ...i, quantity: i.quantity + qty }
-              : i
-          );
-        }
-        return [...prev, { product, quantity: qty }];
-      });
-      addToast(`${product.name} added to cart`, "success");
+    async (product: Product, qty: number) => {
+      if (!user) {
+        addToast("Please sign in to add items to your cart.", "warning");
+        router.push("/login");
+        return;
+      }
+      try {
+        await addCartItem(Number(product.id), qty);
+        await refreshCart();
+        addToast(`${product.name} added to cart`, "success");
+      } catch (err) {
+        addToast(
+          err instanceof Error ? err.message : "Could not add to cart.",
+          "error"
+        );
+        throw err;
+      }
     },
-    [addToast]
+    [addToast, refreshCart, router, user]
   );
 
-  const updateQty = useCallback((productId: string, qty: number) => {
-    setCart((prev) =>
-      prev.map((i) => (i.product.id === productId ? { ...i, quantity: qty } : i))
-    );
-  }, []);
+  const updateQty = useCallback(
+    async (cartItemId: string, qty: number) => {
+      try {
+        await updateCartItem(Number(cartItemId), qty);
+        await refreshCart();
+      } catch (err) {
+        addToast(
+          err instanceof Error ? err.message : "Could not update cart.",
+          "error"
+        );
+        throw err;
+      }
+    },
+    [addToast, refreshCart]
+  );
 
   const removeFromCart = useCallback(
-    (productId: string) => {
-      setCart((prev) => prev.filter((i) => i.product.id !== productId));
-      addToast("Item removed from cart", "info");
+    async (cartItemId: string) => {
+      try {
+        await removeCartItem(Number(cartItemId));
+        await refreshCart();
+        addToast("Item removed from cart", "info");
+      } catch (err) {
+        addToast(
+          err instanceof Error ? err.message : "Could not remove item.",
+          "error"
+        );
+        throw err;
+      }
+    },
+    [addToast, refreshCart]
+  );
+
+  const placeOrder = useCallback(
+    async (form: DeliveryForm) => {
+      const lat = Number(form.lat);
+      const lng = Number(form.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        throw new Error("Please select a delivery location on the map.");
+      }
+
+      const deliveryAddress = [form.address.trim(), form.city.trim()]
+        .filter(Boolean)
+        .join(", ");
+
+      const created = await createOrder({
+        customer_name: form.name.trim(),
+        phone: form.phone.trim(),
+        delivery_address: deliveryAddress,
+        latitude: lat,
+        longitude: lng,
+        order_note: form.note.trim() || null,
+        payment_method: "COD",
+      });
+
+      const mapped = (
+        await enrichApiOrders([created], { customerEmail: user?.email })
+      )[0];
+
+      setConfirmedOrder(mapped);
+      setCart([]);
+      await refreshOrders();
+      addToast("Order placed successfully!", "success");
+      router.push(`/orders/${mapped.id}/confirmation`);
+      return mapped;
+    },
+    [addToast, refreshOrders, router, user?.email]
+  );
+
+  const cancelCustomerOrder = useCallback(
+    async (orderId: string) => {
+      const updated = await apiCancelOrder(Number(orderId));
+      const mappedList = await enrichApiOrders([updated]);
+      const mapped = mappedList[0];
+      setOrders((prev) =>
+        prev.map((o) => (o.id === String(updated.id) ? mapped : o))
+      );
+      addToast("Order cancelled", "success");
     },
     [addToast]
   );
 
-  const checkoutPlaceOrder = useCallback(
-    (
-      form: DeliveryForm,
-      branchId: string,
-      branchName: string,
-      estimatedDelivery: string
-    ) => {
-      setPendingOrderData({ form, branchId, branchName, estimatedDelivery });
-      router.push("/checkout/reservation");
-    },
-    [router]
-  );
-
-  const reservationConfirm = useCallback(() => {
-    router.push("/checkout/place-order");
-  }, [router]);
-
-  const placeOrderConfirm = useCallback(() => {
-    if (!pendingOrderData || !user) return null;
-    const total = cart.reduce((s, i) => s + i.product.price * i.quantity, 0);
-    const newOrder: Order = {
-      id: `ORD-${Date.now().toString().slice(-6)}`,
-      customerId: user.id,
-      customerName: pendingOrderData.form.name || user.name,
-      customerEmail: user.email,
-      phone: pendingOrderData.form.phone,
-      address: pendingOrderData.form.address,
-      city: pendingOrderData.form.city,
-      lat: Number(pendingOrderData.form.lat),
-      lng: Number(pendingOrderData.form.lng),
-      note: pendingOrderData.form.note,
-      items: cart.map((i) => ({
-        productId: i.product.id,
-        productName: i.product.name,
-        price: i.product.price,
-        quantity: i.quantity,
-        image: i.product.image,
-      })),
-      total,
-      status: "ALLOCATED",
-      paymentStatus: "PENDING",
-      branchId: pendingOrderData.branchId,
-      branchName: pendingOrderData.branchName,
-      estimatedDelivery: pendingOrderData.estimatedDelivery,
-      createdAt: new Date().toISOString(),
-      allocation: {
-        branchId: pendingOrderData.branchId,
-        branchName: pendingOrderData.branchName,
-        distanceKm: 3.2,
-        distanceScore: 0.88,
-        workloadScore: 0.72,
-        finalScore: 0.82,
-        distanceWeight: 0.6,
-        workloadWeight: 0.4,
-      },
-    };
-    setOrders((prev) => [newOrder, ...prev]);
-    setConfirmedOrder(newOrder);
-    setCart([]);
-    setPendingOrderData(null);
-    addToast("Order placed successfully!", "success");
-    router.push(`/orders/${newOrder.id}/confirmation`);
-    return newOrder;
-  }, [addToast, cart, pendingOrderData, router, user]);
+  const loadOrder = useCallback(async (orderId: string) => {
+    try {
+      const data = await fetchMyOrder(Number(orderId));
+      const mapped = (await enrichApiOrders([data]))[0];
+      setOrders((prev) => {
+        const exists = prev.some((o) => o.id === mapped.id);
+        return exists
+          ? prev.map((o) => (o.id === mapped.id ? mapped : o))
+          : [mapped, ...prev];
+      });
+      return mapped;
+    } catch {
+      return null;
+    }
+  }, []);
 
   const customerOrders = useMemo(
-    () => orders.filter((o) => o.customerId === user?.id),
-    [orders, user?.id]
+    () => orders.filter((o) => !user || o.customerId === user.id),
+    [orders, user]
   );
 
   const getOrderById = useCallback(
-    (id: string) => orders.find((o) => o.id === id),
-    [orders]
+    (id: string) =>
+      orders.find((o) => o.id === id) ||
+      (confirmedOrder?.id === id ? confirmedOrder : undefined),
+    [orders, confirmedOrder]
   );
 
   const value = useMemo(
     () => ({
       user,
+      authLoading,
       cart,
+      cartLoading,
       orders,
-      pendingOrderData,
       confirmedOrder,
       login,
       logout,
+      refreshCart,
+      refreshOrders,
       addToCart,
       updateQty,
       removeFromCart,
-      checkoutPlaceOrder,
-      reservationConfirm,
-      placeOrderConfirm,
+      placeOrder,
+      cancelCustomerOrder,
+      loadOrder,
       setConfirmedOrder,
       customerOrders,
       getOrderById,
@@ -221,18 +325,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       user,
+      authLoading,
       cart,
+      cartLoading,
       orders,
-      pendingOrderData,
       confirmedOrder,
       login,
       logout,
+      refreshCart,
+      refreshOrders,
       addToCart,
       updateQty,
       removeFromCart,
-      checkoutPlaceOrder,
-      reservationConfirm,
-      placeOrderConfirm,
+      placeOrder,
+      cancelCustomerOrder,
+      loadOrder,
       customerOrders,
       getOrderById,
       navigate,

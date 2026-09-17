@@ -2,14 +2,19 @@
 
 import React, { useState } from "react";
 import type { CartItem, Page } from "@/lib/types";
-import { Button, Card, Input, Textarea, AllocationWidget, Divider, IconMapPin, IconArrowLeft, IconChevronRight } from "@/components/ui";
-
-interface Props {
-  cart: CartItem[];
-  user: { name: string; email: string } | null;
-  onPlaceOrder: (form: DeliveryForm, branchId: string, branchName: string, estimatedDelivery: string) => void;
-  navigate: (page: Page) => void;
-}
+import { BranchLocationPicker } from "@/components/BranchLocationPicker";
+import {
+  Button,
+  Card,
+  Input,
+  Textarea,
+  AllocationWidget,
+  Divider,
+  Alert,
+  IconMapPin,
+  IconArrowLeft,
+  IconChevronRight,
+} from "@/components/ui";
 
 export interface DeliveryForm {
   name: string;
@@ -21,44 +26,72 @@ export interface DeliveryForm {
   note: string;
 }
 
-const SELECTED_BRANCH = { id: "b1", name: "Downtown Hub" };
-const ESTIMATED = "Sep 17, 2026";
+interface Props {
+  cart: CartItem[];
+  user: { name: string; email: string } | null;
+  onSubmitOrder: (form: DeliveryForm) => Promise<void>;
+  navigate: (page: Page) => void;
+  submitting?: boolean;
+}
 
-export const Checkout: React.FC<Props> = ({ cart, user, onPlaceOrder, navigate }) => {
+export const Checkout: React.FC<Props> = ({
+  cart,
+  user,
+  onSubmitOrder,
+  navigate,
+  submitting = false,
+}) => {
   const [form, setForm] = useState<DeliveryForm>({
     name: user?.name || "",
     phone: "",
     address: "",
     city: "",
-    lat: "37.7749",
-    lng: "-122.4194",
+    lat: "",
+    lng: "",
     note: "",
   });
-  const [errors, setErrors] = useState<Partial<DeliveryForm>>({});
-  const [allocationState, setAllocationState] = useState<"idle" | "loading" | "success" | "error">("idle");
-  const [step, setStep] = useState<"form" | "allocation">("form");
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
+  const [errors, setErrors] = useState<Partial<DeliveryForm & { location: string }>>({});
+  const [submitError, setSubmitError] = useState("");
 
   const total = cart.reduce((sum, i) => sum + i.product.price * i.quantity, 0);
 
   const validate = () => {
-    const e: Partial<DeliveryForm> = {};
+    const e: Partial<DeliveryForm & { location: string }> = {};
     if (!form.name.trim()) e.name = "Required";
     if (!form.phone.trim()) e.phone = "Required";
-    if (!form.address.trim()) e.address = "Required";
-    if (!form.city.trim()) e.city = "Required";
+    if (!form.address.trim()) e.address = "Enter a delivery address or pick a location on the map.";
+    if (latitude == null || longitude == null) {
+      e.location = "Select a delivery location on the map.";
+    }
     return e;
   };
 
-  const handleCheckStock = async () => {
+  const handlePlaceOrder = async () => {
+    setSubmitError("");
     const errs = validate();
-    if (Object.keys(errs).length) { setErrors(errs); return; }
-    setStep("allocation");
-    setAllocationState("loading");
-    await new Promise((r) => setTimeout(r, 2200));
-    setAllocationState("success");
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      return;
+    }
+    setErrors({});
+    const payload: DeliveryForm = {
+      ...form,
+      lat: String(latitude),
+      lng: String(longitude),
+    };
+    try {
+      await onSubmitOrder(payload);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Could not place order.";
+      setSubmitError(message);
+    }
   };
 
-  const field = (key: keyof DeliveryForm, val: string) => setForm((f) => ({ ...f, [key]: val }));
+  const field = (key: keyof DeliveryForm, val: string) =>
+    setForm((f) => ({ ...f, [key]: val }));
 
   if (cart.length === 0) {
     return (
@@ -69,6 +102,14 @@ export const Checkout: React.FC<Props> = ({ cart, user, onPlaceOrder, navigate }
     );
   }
 
+  const allocationState = submitting
+    ? "loading"
+    : submitError &&
+        (submitError.toLowerCase().includes("no branch") ||
+          submitError.toLowerCase().includes("fulfill"))
+      ? "error"
+      : "idle";
+
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
       <button onClick={() => navigate("cart")} className="flex items-center gap-2 text-sm text-[#64748B] hover:text-[#334155] mb-6 font-medium">
@@ -77,27 +118,22 @@ export const Checkout: React.FC<Props> = ({ cart, user, onPlaceOrder, navigate }
 
       <h1 className="font-display text-3xl font-bold text-[#0F172A] mb-8">Checkout</h1>
 
-      {/* Progress */}
       <div className="flex items-center gap-2 mb-8">
-        {["Delivery", "Allocation", "Confirm"].map((s, i) => {
-          const stageIdx = step === "form" ? 0 : allocationState === "success" ? 1 : 1;
-          return (
-            <React.Fragment key={s}>
-              <div className={`flex items-center gap-2 text-sm font-medium ${i <= stageIdx ? "text-[#4F46E5]" : "text-[#94A3B8]"}`}>
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${i < stageIdx ? "bg-[#4F46E5] text-white" : i === stageIdx ? "border-2 border-[#4F46E5] text-[#4F46E5]" : "border-2 border-[#E2E8F0] text-[#94A3B8]"}`}>
-                  {i < stageIdx ? "✓" : i + 1}
-                </div>
-                <span className="hidden sm:inline">{s}</span>
+        {["Delivery", "Allocation", "Confirm"].map((s, i) => (
+          <React.Fragment key={s}>
+            <div className={`flex items-center gap-2 text-sm font-medium ${i === 0 ? "text-[#4F46E5]" : "text-[#94A3B8]"}`}>
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${i === 0 ? "border-2 border-[#4F46E5] text-[#4F46E5]" : "border-2 border-[#E2E8F0] text-[#94A3B8]"}`}>
+                {i + 1}
               </div>
-              {i < 2 && <div className={`flex-1 h-0.5 ${i < stageIdx ? "bg-[#4F46E5]" : "bg-[#E2E8F0]"}`} />}
-            </React.Fragment>
-          );
-        })}
+              <span className="hidden sm:inline">{s}</span>
+            </div>
+            {i < 2 && <div className="flex-1 h-0.5 bg-[#E2E8F0]" />}
+          </React.Fragment>
+        ))}
       </div>
 
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
-          {/* Delivery Form */}
           <Card className="p-6">
             <h2 className="font-display font-bold text-[#0F172A] mb-5 flex items-center gap-2">
               <IconMapPin size={18} className="text-[#4F46E5]" />
@@ -105,14 +141,30 @@ export const Checkout: React.FC<Props> = ({ cart, user, onPlaceOrder, navigate }
             </h2>
             <div className="grid sm:grid-cols-2 gap-4">
               <Input label="Full name" value={form.name} onChange={(e) => field("name", e.target.value)} error={errors.name} placeholder="Sarah Chen" />
-              <Input label="Phone number" value={form.phone} onChange={(e) => field("phone", e.target.value)} error={errors.phone} placeholder="+1 415-555-0100" type="tel" />
+              <Input label="Phone number" value={form.phone} onChange={(e) => field("phone", e.target.value)} error={errors.phone} placeholder="+94 77 123 4567" type="tel" />
               <div className="sm:col-span-2">
-                <Input label="Delivery address" value={form.address} onChange={(e) => field("address", e.target.value)} error={errors.address} placeholder="88 Marina Blvd, Apt 4B" />
+                <Input label="City / State / ZIP (optional)" value={form.city} onChange={(e) => field("city", e.target.value)} placeholder="Colombo" />
               </div>
-              <Input label="City / State / ZIP" value={form.city} onChange={(e) => field("city", e.target.value)} error={errors.city} placeholder="San Francisco, CA 94123" />
-              <div className="grid grid-cols-2 gap-2">
-                <Input label="Latitude" value={form.lat} onChange={(e) => field("lat", e.target.value)} placeholder="37.7749" />
-                <Input label="Longitude" value={form.lng} onChange={(e) => field("lng", e.target.value)} placeholder="-122.4194" />
+              <div className="sm:col-span-2">
+                <BranchLocationPicker
+                  address={form.address}
+                  onAddressChange={(address) => field("address", address)}
+                  latitude={latitude}
+                  longitude={longitude}
+                  onCoordinatesChange={(lat, lng) => {
+                    setLatitude(lat);
+                    setLongitude(lng);
+                    setForm((f) => ({ ...f, lat: String(lat), lng: String(lng) }));
+                    setErrors((e) => ({ ...e, location: undefined }));
+                  }}
+                  disabled={submitting}
+                />
+                {errors.address && (
+                  <p className="text-xs text-[#EF4444] mt-1">{errors.address}</p>
+                )}
+                {errors.location && (
+                  <p className="text-xs text-[#EF4444] mt-1">{errors.location}</p>
+                )}
               </div>
               <div className="sm:col-span-2">
                 <Textarea label="Order note (optional)" value={form.note} onChange={(e) => field("note", e.target.value)} placeholder="E.g. Leave at the door, ring buzzer 4B..." />
@@ -120,33 +172,35 @@ export const Checkout: React.FC<Props> = ({ cart, user, onPlaceOrder, navigate }
             </div>
           </Card>
 
-          {/* Allocation Widget */}
           <Card className="p-6">
             <h2 className="font-display font-bold text-[#0F172A] mb-2">Branch Allocation</h2>
             <p className="text-sm text-[#64748B] mb-5">
-              Our system will automatically find the best branch based on your location, stock availability, and branch workload.
+              When you place the order, our system automatically finds the best branch based on your location, stock availability, and branch workload.
             </p>
-            <AllocationWidget state={allocationState} branchName={SELECTED_BRANCH.name} estimatedDelivery={ESTIMATED} />
-            {step === "form" && (
-              <Button size="lg" onClick={handleCheckStock} className="w-full mt-2">
-                Check Stock & Find Branch
-              </Button>
+            <AllocationWidget state={allocationState} />
+            {submitError && allocationState !== "error" && (
+              <Alert variant="danger" className="mt-4">
+                {submitError}
+              </Alert>
             )}
-            {allocationState === "success" && (
-              <Button size="lg" onClick={() => onPlaceOrder(form, SELECTED_BRANCH.id, SELECTED_BRANCH.name, ESTIMATED)} className="w-full mt-4" iconRight={<IconChevronRight size={16} />}>
-                Reserve Stock &amp; Continue
-              </Button>
-            )}
+            <Button
+              size="lg"
+              loading={submitting}
+              onClick={() => void handlePlaceOrder()}
+              className="w-full mt-4"
+              iconRight={<IconChevronRight size={16} />}
+            >
+              Place Order
+            </Button>
           </Card>
         </div>
 
-        {/* Order Summary */}
         <div>
           <Card className="p-5 sticky top-24">
             <h2 className="font-display font-bold text-[#0F172A] mb-4">Order Summary</h2>
             <div className="space-y-3 mb-4">
               {cart.map((item) => (
-                <div key={item.product.id} className="flex gap-3">
+                <div key={item.cartItemId} className="flex gap-3">
                   <img src={item.product.image} alt={item.product.name} className="w-12 h-12 rounded-xl object-cover bg-[#F1F5F9] shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-[#0F172A] leading-tight line-clamp-2">{item.product.name}</p>

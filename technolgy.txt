@@ -57,3 +57,90 @@ quantity: int = Field(ge=0)#never allowed negative quantity, so ge=0 (greater th
 
 
 class BranchStockResponse(BaseModel):
+
+##Why timedelta?
+
+Because we're working with time durations, not dates.
+
+For example:
+
+Restock Date = September 18, 10:00 AM
+
+is a datetime.
+
+But:
+
+Processing Time = 1 day
+
+is a duration.
+
+Python represents durations using:
+
+timedelta
+
+So later we can safely do:
+
+eta = restock_wait + processing_time + travel_time
+
+
+##🧮 MATHEMATICS — Step 1: Distance
+
+We need the geographical distance between two coordinates.
+
+We'll use the Haversine formula.
+
+You don't need to memorize the formula, but you should understand what it does:
+
+It calculates the approximate straight-line distance between two points on Earth using their latitude and longitude.
+
+The formula is:
+
+$$ a = \sin^2(\frac{\Delta\phi}{2}) + \cos(\phi_1)\cos(\phi_2) \sin^2(\frac{\Delta\lambda}{2}) $$ $$ c = 2\arctan2(\sqrt a,\sqrt{1-a}) $$ $$ Distance = R \times c $$
+
+where:
+
+\(φ\) = latitude in radians
+\(λ\) = longitude in radians
+\(R\) = Earth's radius ≈ 6371 km
+
+🧮 Let's understand the calculation
+
+Suppose:
+
+Branch:
+latitude  = 6.9271
+longitude = 79.8612
+
+Customer:
+latitude  = 7.2906
+longitude = 80.6337
+
+The function converts the coordinates to radians:
+
+degrees → radians
+
+Then applies the Haversine formula.
+
+The result might be approximately:
+
+~110 km
+
+#osrm- calculate distance
+
+#But we also need deterministic tie-breaking.
+
+For example, if:
+
+Branch A → 80.0
+Branch B → 80.0
+
+we need a consistent rule rather than randomly choosing one.
+
+Our agreed tie-break order is:
+
+1. Higher Final Score
+2. Lower ETA
+3. Lower Workload
+4. Lower Branch ID
+
+This makes the algorithm predictable.

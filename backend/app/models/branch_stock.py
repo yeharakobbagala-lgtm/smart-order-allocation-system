@@ -1,8 +1,10 @@
 from typing import TYPE_CHECKING
-from sqlalchemy import ForeignKey, UniqueConstraint
+from sqlalchemy import DateTime,ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
+from datetime import datetime
+
 
 if TYPE_CHECKING:
     from app.models.branch import Branch
@@ -34,6 +36,16 @@ class BranchStock(Base):
     quantity: Mapped[int] = mapped_column(
         nullable=False,
         default=0
+    )
+
+    restock_quantity: Mapped[int] = mapped_column(
+    nullable=False,
+    default=0
+    )
+
+    restock_date: Mapped[datetime | None] = mapped_column(
+    DateTime,
+    nullable=True
     )
 
     branch: Mapped["Branch"] = relationship(

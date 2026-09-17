@@ -2,18 +2,43 @@
 
 import React from "react";
 import type { CartItem, Page } from "@/lib/types";
-import { Button, Card, Alert, EmptyState, IconCart, IconX, IconArrowLeft, IconChevronRight } from "@/components/ui";
+import {
+  Button,
+  Card,
+  Alert,
+  EmptyState,
+  LoadingState,
+  IconCart,
+  IconX,
+  IconArrowLeft,
+  IconChevronRight,
+} from "@/components/ui";
 
 interface Props {
   cart: CartItem[];
-  onUpdateQty: (productId: string, qty: number) => void;
-  onRemove: (productId: string) => void;
+  cartLoading?: boolean;
+  onUpdateQty: (cartItemId: string, qty: number) => void | Promise<void>;
+  onRemove: (cartItemId: string) => void | Promise<void>;
   navigate: (page: Page, id?: string) => void;
 }
 
-export const Cart: React.FC<Props> = ({ cart, onUpdateQty, onRemove, navigate }) => {
+export const Cart: React.FC<Props> = ({
+  cart,
+  cartLoading,
+  onUpdateQty,
+  onRemove,
+  navigate,
+}) => {
   const total = cart.reduce((sum, i) => sum + i.product.price * i.quantity, 0);
   const itemCount = cart.reduce((sum, i) => sum + i.quantity, 0);
+
+  if (cartLoading && cart.length === 0) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16">
+        <LoadingState message="Loading cart…" />
+      </div>
+    );
+  }
 
   if (cart.length === 0) {
     return (
@@ -44,10 +69,9 @@ export const Cart: React.FC<Props> = ({ cart, onUpdateQty, onRemove, navigate })
       </Alert>
 
       <div className="grid lg:grid-cols-3 gap-8">
-        {/* Items */}
         <div className="lg:col-span-2 space-y-3">
           {cart.map((item) => (
-            <Card key={item.product.id} className="p-4">
+            <Card key={item.cartItemId} className="p-4">
               <div className="flex gap-4">
                 <img
                   src={item.product.image}
@@ -58,17 +82,20 @@ export const Cart: React.FC<Props> = ({ cart, onUpdateQty, onRemove, navigate })
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-xs text-[#94A3B8] mb-0.5">{item.product.category}</p>
                       <h3 className="font-display font-bold text-[#0F172A] text-sm leading-tight">{item.product.name}</h3>
                     </div>
-                    <button onClick={() => onRemove(item.product.id)} className="p-1.5 rounded-lg text-[#94A3B8] hover:bg-[#FEF2F2] hover:text-[#EF4444] transition-colors shrink-0">
+                    <button onClick={() => void onRemove(item.cartItemId)} className="p-1.5 rounded-lg text-[#94A3B8] hover:bg-[#FEF2F2] hover:text-[#EF4444] transition-colors shrink-0">
                       <IconX size={16} />
                     </button>
                   </div>
                   <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
                     <div className="flex items-center gap-0">
                       <button
-                        onClick={() => item.quantity > 1 ? onUpdateQty(item.product.id, item.quantity - 1) : onRemove(item.product.id)}
+                        onClick={() =>
+                          item.quantity > 1
+                            ? void onUpdateQty(item.cartItemId, item.quantity - 1)
+                            : void onRemove(item.cartItemId)
+                        }
                         className="w-8 h-8 flex items-center justify-center rounded-l-lg border border-[#E2E8F0] bg-[#F8FAFC] text-[#334155] hover:bg-[#F1F5F9] text-sm"
                       >
                         −
@@ -77,7 +104,7 @@ export const Cart: React.FC<Props> = ({ cart, onUpdateQty, onRemove, navigate })
                         {item.quantity}
                       </div>
                       <button
-                        onClick={() => onUpdateQty(item.product.id, item.quantity + 1)}
+                        onClick={() => void onUpdateQty(item.cartItemId, item.quantity + 1)}
                         className="w-8 h-8 flex items-center justify-center rounded-r-lg border border-[#E2E8F0] bg-[#F8FAFC] text-[#334155] hover:bg-[#F1F5F9] text-sm"
                       >
                         +
@@ -94,13 +121,12 @@ export const Cart: React.FC<Props> = ({ cart, onUpdateQty, onRemove, navigate })
           ))}
         </div>
 
-        {/* Summary */}
         <div className="lg:col-span-1">
           <Card className="p-5 sticky top-24">
             <h2 className="font-display font-bold text-[#0F172A] mb-4">Order Summary</h2>
             <div className="space-y-3 mb-4">
               {cart.map((item) => (
-                <div key={item.product.id} className="flex items-start justify-between text-sm gap-2">
+                <div key={item.cartItemId} className="flex items-start justify-between text-sm gap-2">
                   <span className="text-[#64748B] leading-tight">{item.product.name} <span className="text-[#94A3B8]">×{item.quantity}</span></span>
                   <span className="font-medium text-[#0F172A] shrink-0">${(item.product.price * item.quantity).toFixed(2)}</span>
                 </div>

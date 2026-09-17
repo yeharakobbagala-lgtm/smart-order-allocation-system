@@ -2,8 +2,13 @@
 
 import React, { useState } from "react";
 import type { User, Page } from "@/lib/types";
-import { MOCK_USERS } from "@/lib/data";
-import { getApiBaseUrl, loginWithApi, setAccessToken } from "@/lib/api";
+import {
+  loginWithApi,
+  registerUser,
+  setAccessToken,
+  ApiError,
+} from "@/lib/api";
+import { mapApiUser } from "@/lib/mappers";
 import { Button, Input, Alert, IconPackage, IconEye, IconEyeOff } from "@/components/ui";
 
 // ── Login ─────────────────────────────────────────────────────────────────────
@@ -23,39 +28,24 @@ export const Login: React.FC<LoginProps> = ({ onLogin, navigate }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!email || !password) { setError("Please fill in all fields."); return; }
-    setLoading(true);
-
-    if (getApiBaseUrl()) {
-      try {
-        const result = await loginWithApi(email, password);
-        setAccessToken(result.access_token);
-        const apiUser: User = {
-          id: String(result.user.id),
-          name: result.user.name,
-          email: result.user.email,
-          role: result.user.role === "admin" ? "admin" : "customer",
-          status: "active",
-          createdAt: new Date().toISOString().slice(0, 10),
-        };
-        setLoading(false);
-        onLogin(apiUser);
-        return;
-      } catch {
-        // Fall through to local demo auth when API login fails
-      }
-    }
-
-    await new Promise((r) => setTimeout(r, 400));
-    const user = MOCK_USERS.find((u) => u.email === email);
-    if (!user || password !== "demo123") {
-      setError("Incorrect email or password. Try customer@demo.com / demo123 or admin@demo.com / demo123");
-      setLoading(false);
+    if (!email || !password) {
+      setError("Please fill in all fields.");
       return;
     }
-    setAccessToken(null);
-    setLoading(false);
-    onLogin(user);
+    setLoading(true);
+    try {
+      const result = await loginWithApi(email, password);
+      setAccessToken(result.access_token);
+      onLogin(mapApiUser(result.user));
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Incorrect email or password. Please try again."
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -134,12 +124,6 @@ export const Login: React.FC<LoginProps> = ({ onLogin, navigate }) => {
               Create one
             </button>
           </p>
-
-          <div className="mt-8 p-4 bg-[#F8FAFC] rounded-xl border border-[#E2E8F0] text-xs text-[#64748B]">
-            <p className="font-medium text-[#334155] mb-1">Demo credentials</p>
-            <p>Customer: customer@demo.com / demo123</p>
-            <p>Admin: admin@demo.com / demo123</p>
-          </div>
         </div>
       </div>
     </div>
@@ -170,12 +154,29 @@ export const Register: React.FC<RegisterProps> = ({ navigate }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const errs = validate();
-    if (Object.keys(errs).length) { setErrors(errs); return; }
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      return;
+    }
     setErrors({});
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1200));
-    setLoading(false);
-    setSuccess(true);
+    try {
+      await registerUser({
+        name: form.name.trim(),
+        email: form.email.trim(),
+        password: form.password,
+      });
+      setSuccess(true);
+    } catch (err) {
+      setErrors({
+        form:
+          err instanceof ApiError
+            ? err.message
+            : "Registration failed. Please try again.",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (success) {
@@ -205,6 +206,8 @@ export const Register: React.FC<RegisterProps> = ({ navigate }) => {
         <div className="bg-white rounded-2xl border border-[#E2E8F0] shadow-sm p-8">
           <h1 className="font-display text-2xl font-bold text-[#0F172A] mb-1">Create your account</h1>
           <p className="text-[#64748B] text-sm mb-6">All fields are required.</p>
+
+          {errors.form && <Alert variant="danger" className="mb-4">{errors.form}</Alert>}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <Input label="Full name" placeholder="Sarah Chen" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} error={errors.name} />

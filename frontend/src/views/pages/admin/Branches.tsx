@@ -1,9 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import type { Branch } from "@/lib/types";
-import { MOCK_BRANCHES } from "@/lib/data";
-import { createBranch, getApiBaseUrl, getAccessToken } from "@/lib/api";
+import { createBranch, fetchBranches, type ApiBranch, ApiError } from "@/lib/api";
 import { BranchLocationPicker } from "@/components/BranchLocationPicker";
 import {
   Button,
@@ -11,6 +10,8 @@ import {
   Modal,
   Input,
   Alert,
+  LoadingState,
+  ErrorState,
   IconPlus,
   IconEdit,
   IconBranch,
@@ -35,13 +36,48 @@ const emptyForm = (): BranchFormState => ({
   capacity: "",
 });
 
+function mapApiBranch(b: ApiBranch, orderCount = 0): Branch {
+  return {
+    id: String(b.id),
+    name: b.name,
+    address: b.address,
+    city: b.address,
+    lat: b.latitude,
+    lng: b.longitude,
+    capacity: b.capacity,
+    active: b.active,
+    currentWorkload: orderCount,
+  };
+}
+
 export const AdminBranches: React.FC = () => {
-  const [branches, setBranches] = useState<Branch[]>(MOCK_BRANCHES);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [modal, setModal] = useState<"add" | "edit" | null>(null);
   const [editing, setEditing] = useState<Branch | null>(null);
   const [form, setForm] = useState<BranchFormState>(emptyForm());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError("");
+    try {
+      const data = await fetchBranches();
+      setBranches(data.map((b) => mapApiBranch(b)));
+    } catch (err) {
+      setLoadError(
+        err instanceof ApiError ? err.message : "Failed to load branches."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const openAdd = () => {
     setForm(emptyForm());
@@ -88,7 +124,7 @@ export const AdminBranches: React.FC = () => {
 
     setSaving(true);
     try {
-      if (modal === "add" && getApiBaseUrl() && getAccessToken()) {
+      if (modal === "add") {
         const created = await createBranch({
           name: form.name.trim(),
           address: form.address.trim(),
@@ -98,15 +134,8 @@ export const AdminBranches: React.FC = () => {
         });
         setBranches((prev) => [
           {
-            id: String(created.id),
-            name: created.name,
-            address: created.address,
+            ...mapApiBranch(created),
             city: form.city.trim() || created.address,
-            lat: created.latitude,
-            lng: created.longitude,
-            capacity: created.capacity,
-            active: created.active,
-            currentWorkload: 0,
           },
           ...prev,
         ]);
@@ -126,32 +155,11 @@ export const AdminBranches: React.FC = () => {
               : b
           )
         );
-      } else {
-        // Local fallback when API/token is not available
-        setBranches((prev) => [
-          {
-            id: `b${Date.now()}`,
-            name: form.name.trim(),
-            address: form.address.trim(),
-            city: form.city.trim() || form.address.trim(),
-            lat: form.latitude!,
-            lng: form.longitude!,
-            capacity,
-            active: true,
-            currentWorkload: 0,
-          },
-          ...prev,
-        ]);
-        if (getApiBaseUrl() && !getAccessToken()) {
-          setError(
-            "Branch saved locally. Sign in via the API (with a token) to POST /branches/."
-          );
-        }
       }
       setModal(null);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to save the branch."
+        err instanceof ApiError ? err.message : "Failed to save the branch."
       );
     } finally {
       setSaving(false);
@@ -163,6 +171,11 @@ export const AdminBranches: React.FC = () => {
       prev.map((b) => (b.id === id ? { ...b, active: !b.active } : b))
     );
   };
+
+  if (loading) return <LoadingState message="Loading branches…" />;
+  if (loadError && branches.length === 0) {
+    return <ErrorState message={loadError} onRetry={() => void load()} />;
+  }
 
   return (
     <div className="space-y-6">
@@ -225,7 +238,7 @@ export const AdminBranches: React.FC = () => {
                     <div
                       className="h-full rounded-full transition-all"
                       style={{
-                        width: `${workloadPct}%`,
+                        width: `${Math.min(workloadPct, 100)}%`,
                         backgroundColor:
                           workloadPct > 80
                             ? "#EF4444"

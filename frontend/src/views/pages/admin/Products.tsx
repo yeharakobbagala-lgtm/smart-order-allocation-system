@@ -1,12 +1,34 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import type { Product } from "@/lib/types";
-import { MOCK_PRODUCTS } from "@/lib/data";
-import { Button, Card, Modal, Input, Textarea, Badge, EmptyState, IconSearch, IconEdit, IconPlus, IconPackage } from "@/components/ui";
+import {
+  createProduct,
+  fetchProducts,
+  updateProduct,
+  ApiError,
+} from "@/lib/api";
+import { mapApiProduct } from "@/lib/mappers";
+import {
+  Button,
+  Card,
+  Modal,
+  Input,
+  Textarea,
+  Badge,
+  EmptyState,
+  LoadingState,
+  ErrorState,
+  IconSearch,
+  IconEdit,
+  IconPlus,
+  IconPackage,
+} from "@/components/ui";
 
 export const AdminProducts: React.FC = () => {
-  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState<"add" | "edit" | null>(null);
   const [editing, setEditing] = useState<Product | null>(null);
@@ -14,7 +36,30 @@ export const AdminProducts: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const filtered = products.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()) || p.category.toLowerCase().includes(search.toLowerCase()));
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError("");
+    try {
+      const data = await fetchProducts();
+      setProducts(data.map(mapApiProduct));
+    } catch (err) {
+      setLoadError(
+        err instanceof ApiError ? err.message : "Failed to load products."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const filtered = products.filter(
+    (p) =>
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      p.category.toLowerCase().includes(search.toLowerCase())
+  );
 
   const openAdd = () => {
     setForm({ name: "", description: "", price: "", image: "", active: true });
@@ -40,29 +85,60 @@ export const AdminProducts: React.FC = () => {
 
   const handleSave = async () => {
     const errs = validate();
-    if (Object.keys(errs).length) { setErrors(errs); return; }
-    setSaving(true);
-    await new Promise((r) => setTimeout(r, 800));
-    if (editing) {
-      setProducts((prev) => prev.map((p) => p.id === editing.id ? { ...p, ...form, price: Number(form.price) } : p));
-    } else {
-      setProducts((prev) => [...prev, {
-        id: `p${Date.now()}`,
-        name: form.name,
-        description: form.description,
-        price: Number(form.price),
-        image: form.image || "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=600&h=600&fit=crop&auto=format",
-        category: "General",
-        active: form.active,
-      }]);
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      return;
     }
-    setSaving(false);
-    setModal(null);
+    setSaving(true);
+    try {
+      const payload = {
+        name: form.name.trim(),
+        description: form.description.trim(),
+        price: Number(form.price),
+        image: form.image.trim() || null,
+        active: form.active,
+      };
+      if (editing) {
+        const updated = await updateProduct(Number(editing.id), payload);
+        setProducts((prev) =>
+          prev.map((p) => (p.id === editing.id ? mapApiProduct(updated) : p))
+        );
+      } else {
+        const created = await createProduct(payload);
+        setProducts((prev) => [mapApiProduct(created), ...prev]);
+      }
+      setModal(null);
+    } catch (err) {
+      setErrors({
+        form:
+          err instanceof ApiError ? err.message : "Failed to save product.",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const toggleActive = (id: string) => {
-    setProducts((prev) => prev.map((p) => p.id === id ? { ...p, active: !p.active } : p));
+  const toggleActive = async (product: Product) => {
+    try {
+      const updated = await updateProduct(Number(product.id), {
+        name: product.name,
+        description: product.description,
+        price: product.price,
+        image: product.image,
+        active: !product.active,
+      });
+      setProducts((prev) =>
+        prev.map((p) => (p.id === product.id ? mapApiProduct(updated) : p))
+      );
+    } catch {
+      /* ignore */
+    }
   };
+
+  if (loading) return <LoadingState message="Loading products…" />;
+  if (loadError && products.length === 0) {
+    return <ErrorState message={loadError} onRetry={() => void load()} />;
+  }
 
   return (
     <div className="space-y-6">
@@ -108,7 +184,7 @@ export const AdminProducts: React.FC = () => {
                   <td className="px-4 py-3"><Badge variant="muted">{p.category}</Badge></td>
                   <td className="px-4 py-3 font-bold text-[#0F172A]">${p.price.toFixed(2)}</td>
                   <td className="px-4 py-3">
-                    <button onClick={() => toggleActive(p.id)} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${p.active ? "bg-[#10B981]" : "bg-[#CBD5E1]"}`}>
+                    <button onClick={() => void toggleActive(p)} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${p.active ? "bg-[#10B981]" : "bg-[#CBD5E1]"}`}>
                       <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${p.active ? "translate-x-4" : "translate-x-1"}`} />
                     </button>
                     <span className={`ml-2 text-xs font-medium ${p.active ? "text-[#065F46]" : "text-[#94A3B8]"}`}>{p.active ? "Active" : "Inactive"}</span>
@@ -127,6 +203,7 @@ export const AdminProducts: React.FC = () => {
 
       <Modal open={modal !== null} onClose={() => setModal(null)} title={modal === "add" ? "Add Product" : "Edit Product"} size="md">
         <div className="space-y-4">
+          {errors.form && <p className="text-sm text-[#EF4444]">{errors.form}</p>}
           <Input label="Product Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} error={errors.name} placeholder="Sony WH-1000XM5 Headphones" />
           <Textarea label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} error={errors.description} placeholder="Product description..." rows={3} />
           <Input label="Price (USD)" type="number" min="0" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} error={errors.price} placeholder="49.99" />
@@ -138,7 +215,7 @@ export const AdminProducts: React.FC = () => {
             <span className="text-sm font-medium text-[#334155]">Active</span>
           </div>
           <div className="flex gap-3 pt-2">
-            <Button loading={saving} onClick={handleSave} className="flex-1">{modal === "add" ? "Add Product" : "Save Changes"}</Button>
+            <Button loading={saving} onClick={() => void handleSave()} className="flex-1">{modal === "add" ? "Add Product" : "Save Changes"}</Button>
             <Button variant="outline" onClick={() => setModal(null)} className="flex-1">Cancel</Button>
           </div>
         </div>

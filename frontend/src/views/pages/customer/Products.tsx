@@ -1,43 +1,135 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { Product, CartItem, Page } from "@/lib/types";
-import { MOCK_PRODUCTS } from "@/lib/data";
-import { Button, Card, Badge, QuantitySelector, EmptyState, IconSearch, IconFilter, IconCart, IconPackage } from "@/components/ui";
+import { fetchProducts, searchProducts, ApiError } from "@/lib/api";
+import { mapApiProduct } from "@/lib/mappers";
+import {
+  Button,
+  Card,
+  Badge,
+  QuantitySelector,
+  EmptyState,
+  LoadingState,
+  ErrorState,
+  IconSearch,
+  IconCart,
+  IconPackage,
+} from "@/components/ui";
 
 interface Props {
   cart: CartItem[];
-  onAddToCart: (product: Product, qty: number) => void;
+  onAddToCart: (product: Product, qty: number) => Promise<void>;
   navigate: (page: Page, id?: string) => void;
 }
 
-const CATEGORIES = ["All", "Electronics", "Accessories", "Furniture", "Home Office", "Lifestyle"];
-
 export const Products: React.FC<Props> = ({ cart, onAddToCart, navigate }) => {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("All");
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
+  const [addingId, setAddingId] = useState<string | null>(null);
 
-  const filtered = MOCK_PRODUCTS.filter((p) => {
-    const matchCat = category === "All" || p.category === category;
-    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.description.toLowerCase().includes(search.toLowerCase());
-    return matchCat && matchSearch && p.active;
-  });
+  const loadAll = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await fetchProducts();
+      setProducts(data.filter((p) => p.active).map(mapApiProduct));
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : "Failed to load products."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadAll();
+  }, [loadAll]);
+
+  useEffect(() => {
+    const q = search.trim();
+    if (q.length >= 2) {
+      const timer = setTimeout(async () => {
+        setLoading(true);
+        setError("");
+        try {
+          const data = await searchProducts(q);
+          setProducts(data.filter((p) => p.active).map(mapApiProduct));
+        } catch (err) {
+          setError(
+            err instanceof ApiError ? err.message : "Search failed."
+          );
+        } finally {
+          setLoading(false);
+        }
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+    if (q.length === 0) {
+      void loadAll();
+    }
+  }, [search, loadAll]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (q.length >= 2) return products;
+    if (!q) return products;
+    return products.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.description.toLowerCase().includes(q)
+    );
+  }, [products, search]);
 
   const getQty = (id: string) => quantities[id] || 1;
 
-  const handleAdd = (product: Product) => {
-    onAddToCart(product, getQty(product.id));
-    setAddedIds((prev) => new Set(prev).add(product.id));
-    setTimeout(() => setAddedIds((prev) => { const n = new Set(prev); n.delete(product.id); return n; }), 2000);
+  const handleAdd = async (product: Product) => {
+    setAddingId(product.id);
+    try {
+      await onAddToCart(product, getQty(product.id));
+      setAddedIds((prev) => new Set(prev).add(product.id));
+      setTimeout(
+        () =>
+          setAddedIds((prev) => {
+            const n = new Set(prev);
+            n.delete(product.id);
+            return n;
+          }),
+        2000
+      );
+    } catch {
+      /* toast handled in provider */
+    } finally {
+      setAddingId(null);
+    }
   };
 
-  const cartCount = (id: string) => cart.find((i) => i.product.id === id)?.quantity || 0;
+  const cartCount = (id: string) =>
+    cart.find((i) => i.product.id === id)?.quantity || 0;
+
+  if (loading && products.length === 0) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16">
+        <LoadingState message="Loading products…" />
+      </div>
+    );
+  }
+
+  if (error && products.length === 0) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16">
+        <ErrorState message={error} onRetry={() => void loadAll()} />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="font-display text-3xl font-bold text-[#0F172A]">Products</h1>
@@ -54,28 +146,22 @@ export const Products: React.FC<Props> = ({ cart, onAddToCart, navigate }) => {
         </div>
       </div>
 
-      {/* Category Filter */}
-      <div className="flex gap-2 flex-wrap mb-8">
-        {CATEGORIES.map((cat) => (
-          <button
-            key={cat}
-            onClick={() => setCategory(cat)}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-all border ${category === cat ? "bg-[#4F46E5] text-white border-[#4F46E5]" : "bg-white text-[#64748B] border-[#E2E8F0] hover:border-[#4F46E5]/30 hover:text-[#4F46E5]"}`}
-          >
-            {cat}
-          </button>
-        ))}
-      </div>
-
-      {/* Cart Notice */}
       <div className="mb-6 bg-[#FFFBEB] border border-[#FDE68A] rounded-xl px-4 py-3 flex items-start gap-2.5 text-sm text-[#92400E]">
         <svg className="w-4 h-4 mt-0.5 shrink-0 text-[#F59E0B]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
         <span>Adding items to cart does <strong>not</strong> reserve stock. Stock availability is checked at checkout.</span>
       </div>
 
-      {/* Grid */}
       {filtered.length === 0 ? (
-        <EmptyState icon={<IconPackage size={24} />} title="No products found" description="Try a different search term or category." action={<Button variant="secondary" onClick={() => { setSearch(""); setCategory("All"); }}>Clear filters</Button>} />
+        <EmptyState
+          icon={<IconPackage size={24} />}
+          title="No products found"
+          description="Try a different search term."
+          action={
+            <Button variant="secondary" onClick={() => setSearch("")}>
+              Clear search
+            </Button>
+          }
+        />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
           {filtered.map((product) => {
@@ -105,7 +191,6 @@ export const Products: React.FC<Props> = ({ cart, onAddToCart, navigate }) => {
                   )}
                 </div>
                 <div className="p-4 flex flex-col flex-1">
-                  <p className="text-xs font-medium text-[#94A3B8] mb-1">{product.category}</p>
                   <h3
                     className="font-display font-bold text-[#0F172A] text-sm leading-tight mb-1.5 cursor-pointer hover:text-[#4F46E5] transition-colors line-clamp-2"
                     onClick={() => navigate("product-details", product.id)}
@@ -124,7 +209,8 @@ export const Products: React.FC<Props> = ({ cart, onAddToCart, navigate }) => {
                     variant={added ? "success" : "primary"}
                     size="sm"
                     className="w-full"
-                    onClick={() => handleAdd(product)}
+                    loading={addingId === product.id}
+                    onClick={() => void handleAdd(product)}
                     icon={added ? <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg> : <IconCart size={14} />}
                   >
                     {added ? "Added to cart!" : "Add to Cart"}

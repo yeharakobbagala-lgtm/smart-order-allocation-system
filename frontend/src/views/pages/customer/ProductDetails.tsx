@@ -1,37 +1,116 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import type { CartItem, Page, Product } from "@/lib/types";
-import { MOCK_PRODUCTS } from "@/lib/data";
-import { Button, Badge, Card, QuantitySelector, IconCart, IconArrowLeft, IconStar, IconCheck } from "@/components/ui";
+import { fetchProduct, fetchProducts, ApiError } from "@/lib/api";
+import { mapApiProduct } from "@/lib/mappers";
+import {
+  Button,
+  Badge,
+  Card,
+  QuantitySelector,
+  LoadingState,
+  ErrorState,
+  IconCart,
+  IconArrowLeft,
+  IconStar,
+  IconCheck,
+} from "@/components/ui";
 
 interface Props {
   productId: string;
   cart: CartItem[];
-  onAddToCart: (product: Product, qty: number) => void;
+  onAddToCart: (product: Product, qty: number) => Promise<void>;
   navigate: (page: Page, id?: string) => void;
 }
 
-export const ProductDetails: React.FC<Props> = ({ productId, cart, onAddToCart, navigate }) => {
-  const product = MOCK_PRODUCTS.find((p) => p.id === productId);
+export const ProductDetails: React.FC<Props> = ({
+  productId,
+  cart,
+  onAddToCart,
+  navigate,
+}) => {
+  const [product, setProduct] = useState<Product | null>(null);
+  const [related, setRelated] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
+  const [adding, setAdding] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const id = Number(productId);
+      if (!Number.isFinite(id)) {
+        setProduct(null);
+        return;
+      }
+      const [apiProduct, all] = await Promise.all([
+        fetchProduct(id),
+        fetchProducts().catch(() => []),
+      ]);
+      const mapped = mapApiProduct(apiProduct);
+      setProduct(mapped);
+      setRelated(
+        all
+          .filter((p) => p.id !== id && p.active)
+          .slice(0, 3)
+          .map(mapApiProduct)
+      );
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : "Failed to load product."
+      );
+      setProduct(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [productId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16">
+        <LoadingState message="Loading product…" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16">
+        <ErrorState message={error} onRetry={() => void load()} />
+      </div>
+    );
+  }
 
   if (!product) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16 text-center">
         <p className="text-[#64748B]">Product not found.</p>
-        <Button className="mt-4" onClick={() => navigate("products")}>Back to Products</Button>
+        <Button className="mt-4" onClick={() => navigate("products")}>
+          Back to Products
+        </Button>
       </div>
     );
   }
 
-  const related = MOCK_PRODUCTS.filter((p) => p.id !== product.id && p.category === product.category).slice(0, 3);
-
-  const handleAdd = () => {
-    onAddToCart(product, qty);
-    setAdded(true);
-    setTimeout(() => setAdded(false), 2500);
+  const handleAdd = async () => {
+    setAdding(true);
+    try {
+      await onAddToCart(product, qty);
+      setAdded(true);
+      setTimeout(() => setAdded(false), 2500);
+    } catch {
+      /* toast in provider */
+    } finally {
+      setAdding(false);
+    }
   };
 
   const inCart = cart.find((i) => i.product.id === product.id)?.quantity || 0;
@@ -44,14 +123,12 @@ export const ProductDetails: React.FC<Props> = ({ productId, cart, onAddToCart, 
       </button>
 
       <div className="grid lg:grid-cols-2 gap-10 mb-16">
-        {/* Image */}
         <div className="relative">
           <div className="aspect-square bg-[#F8FAFC] rounded-3xl overflow-hidden">
             <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
           </div>
         </div>
 
-        {/* Info */}
         <div className="flex flex-col">
           <div className="flex items-center gap-2 mb-3">
             <Badge variant="muted">{product.category}</Badge>
@@ -64,7 +141,9 @@ export const ProductDetails: React.FC<Props> = ({ productId, cart, onAddToCart, 
           <h1 className="font-display text-3xl font-bold text-[#0F172A] mb-3">{product.name}</h1>
 
           <div className="flex items-center gap-2 mb-4">
-            {[1,2,3,4,5].map((s) => <IconStar key={s} size={16} />)}
+            {[1, 2, 3, 4, 5].map((s) => (
+              <IconStar key={s} size={16} />
+            ))}
             <span className="text-sm text-[#64748B] ml-1">4.8 (128 reviews)</span>
           </div>
 
@@ -77,7 +156,9 @@ export const ProductDetails: React.FC<Props> = ({ productId, cart, onAddToCart, 
             <div className="flex items-center gap-4">
               <QuantitySelector value={qty} onChange={setQty} max={20} />
               <span className="text-sm text-[#64748B]">
-                {inCart > 0 && <span className="text-[#4F46E5] font-medium">{inCart} already in cart</span>}
+                {inCart > 0 && (
+                  <span className="text-[#4F46E5] font-medium">{inCart} already in cart</span>
+                )}
               </span>
             </div>
             <p className="text-xs text-[#94A3B8] mt-3 flex items-center gap-1">
@@ -91,7 +172,8 @@ export const ProductDetails: React.FC<Props> = ({ productId, cart, onAddToCart, 
               size="lg"
               variant={added ? "success" : "primary"}
               className="flex-1"
-              onClick={handleAdd}
+              loading={adding}
+              onClick={() => void handleAdd()}
               icon={added ? <IconCheck size={18} /> : <IconCart size={18} />}
             >
               {added ? "Added to Cart!" : "Add to Cart"}
@@ -112,7 +194,6 @@ export const ProductDetails: React.FC<Props> = ({ productId, cart, onAddToCart, 
         </div>
       </div>
 
-      {/* Related */}
       {related.length > 0 && (
         <div>
           <h2 className="font-display text-2xl font-bold text-[#0F172A] mb-6">Related products</h2>
@@ -122,7 +203,6 @@ export const ProductDetails: React.FC<Props> = ({ productId, cart, onAddToCart, 
                 <img src={p.image} alt={p.name} className="w-16 h-16 rounded-xl object-cover bg-[#F1F5F9] shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="font-display font-bold text-[#0F172A] text-sm leading-tight truncate">{p.name}</p>
-                  <p className="text-xs text-[#64748B] mt-0.5">{p.category}</p>
                   <p className="font-bold text-[#4F46E5] mt-1 text-sm">${p.price.toFixed(2)}</p>
                 </div>
               </Card>

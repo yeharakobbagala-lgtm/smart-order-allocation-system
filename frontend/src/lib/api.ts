@@ -1,4 +1,15 @@
 const TOKEN_KEY = "soa_access_token";
+const USER_KEY = "soa_user";
+
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
 
 export function getApiBaseUrl(): string {
   return (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
@@ -15,14 +26,51 @@ export function setAccessToken(token: string | null) {
   else localStorage.removeItem(TOKEN_KEY);
 }
 
-async function apiFetch<T>(
+export function getStoredUser<T>(): T | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(USER_KEY);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredUser(user: unknown | null) {
+  if (typeof window === "undefined") return;
+  if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
+  else localStorage.removeItem(USER_KEY);
+}
+
+function parseDetail(data: unknown): string {
+  if (!data || typeof data !== "object") return "Request failed";
+  const detail = (data as { detail?: unknown }).detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object" && "msg" in item) {
+          return String((item as { msg: string }).msg);
+        }
+        return JSON.stringify(item);
+      })
+      .join(", ");
+  }
+  return "Request failed";
+}
+
+export async function apiFetch<T>(
   path: string,
   options: RequestInit = {},
   auth = false
 ): Promise<T> {
   const base = getApiBaseUrl();
   if (!base) {
-    throw new Error("API URL is not configured. Set NEXT_PUBLIC_API_URL.");
+    throw new ApiError(
+      "API URL is not configured. Set NEXT_PUBLIC_API_URL in frontend/.env.local.",
+      0
+    );
   }
 
   const headers = new Headers(options.headers || {});
@@ -32,33 +80,265 @@ async function apiFetch<T>(
   if (auth) {
     const token = getAccessToken();
     if (!token) {
-      throw new Error("You must be signed in as an admin to perform this action.");
+      throw new ApiError("You must be signed in to continue.", 401);
     }
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const res = await fetch(`${base}${path}`, { ...options, headers });
+  let res: Response;
+  try {
+    res = await fetch(`${base}${path}`, { ...options, headers });
+  } catch {
+    throw new ApiError(
+      "Cannot reach the API. Check that the backend is running and NEXT_PUBLIC_API_URL is correct.",
+      0
+    );
+  }
+
   if (!res.ok) {
-    let detail = `Request failed (${res.status})`;
+    let message = `Request failed (${res.status})`;
     try {
-      const data = (await res.json()) as { detail?: string };
-      if (typeof data.detail === "string") detail = data.detail;
+      message = parseDetail(await res.json());
     } catch {
       /* ignore */
     }
-    throw new Error(detail);
+    if (res.status === 401) {
+      setAccessToken(null);
+      setStoredUser(null);
+    }
+    throw new ApiError(message, res.status);
   }
 
   if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
+  const text = await res.text();
+  if (!text) return undefined as T;
+  return JSON.parse(text) as T;
 }
 
-export interface ApiAdminUser {
+/* ── Auth ─────────────────────────────────────────────── */
+
+export interface ApiUser {
   id: number;
   name: string;
   email: string;
   role: string;
 }
+
+export interface ApiLoginResponse {
+  access_token: string;
+  token_type: string;
+  user: ApiUser;
+}
+
+export function registerUser(payload: {
+  name: string;
+  email: string;
+  password: string;
+}) {
+  return apiFetch<ApiUser>("/auth/register", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function loginWithApi(email: string, password: string) {
+  return apiFetch<ApiLoginResponse>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export function fetchCurrentUser() {
+  return apiFetch<ApiUser>("/auth/me", { method: "GET" }, true);
+}
+
+/* ── Products ─────────────────────────────────────────── */
+
+export interface ApiProduct {
+  id: number;
+  name: string;
+  description: string | null;
+  price: number | string;
+  image: string | null;
+  active: boolean;
+}
+
+export function fetchProducts() {
+  return apiFetch<ApiProduct[]>("/products/", { method: "GET" });
+}
+
+export function fetchProduct(id: number) {
+  return apiFetch<ApiProduct>(`/products/${id}`, { method: "GET" });
+}
+
+export function searchProducts(name: string) {
+  const q = new URLSearchParams({ name });
+  return apiFetch<ApiProduct[]>(`/products/search?${q}`, { method: "GET" });
+}
+
+export function createProduct(payload: {
+  name: string;
+  description?: string | null;
+  price: number;
+  image?: string | null;
+  active?: boolean;
+}) {
+  return apiFetch<ApiProduct>(
+    "/products/",
+    { method: "POST", body: JSON.stringify(payload) },
+    true
+  );
+}
+
+export function updateProduct(
+  id: number,
+  payload: {
+    name: string;
+    description?: string | null;
+    price: number;
+    image?: string | null;
+    active?: boolean;
+  }
+) {
+  return apiFetch<ApiProduct>(
+    `/products/${id}`,
+    { method: "PUT", body: JSON.stringify(payload) },
+    true
+  );
+}
+
+export function deleteProduct(id: number) {
+  return apiFetch<ApiProduct>(`/products/${id}`, { method: "DELETE" }, true);
+}
+
+/* ── Cart ─────────────────────────────────────────────── */
+
+export interface ApiCartItem {
+  id: number;
+  product_id: number;
+  quantity: number;
+  product: {
+    id: number;
+    name: string;
+    price: number | string;
+    image: string | null;
+  };
+}
+
+export interface ApiCart {
+  id: number;
+  user_id: number;
+  items: ApiCartItem[];
+}
+
+export function fetchCart() {
+  return apiFetch<ApiCart>("/cart", { method: "GET" }, true);
+}
+
+export function addCartItem(product_id: number, quantity: number) {
+  return apiFetch<ApiCartItem>(
+    "/cart/items",
+    {
+      method: "POST",
+      body: JSON.stringify({ product_id, quantity }),
+    },
+    true
+  );
+}
+
+export function updateCartItem(cart_item_id: number, quantity: number) {
+  return apiFetch<ApiCartItem>(
+    `/cart/items/${cart_item_id}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ quantity }),
+    },
+    true
+  );
+}
+
+export function removeCartItem(cart_item_id: number) {
+  return apiFetch<{ message: string }>(
+    `/cart/items/${cart_item_id}`,
+    { method: "DELETE" },
+    true
+  );
+}
+
+/* ── Orders ───────────────────────────────────────────── */
+
+export interface ApiOrderItem {
+  id: number;
+  product_id: number;
+  quantity: number;
+  unit_price: number | string;
+}
+
+export interface ApiOrder {
+  id: number;
+  user_id: number;
+  branch_id: number | null;
+  customer_name: string;
+  phone: string;
+  delivery_address: string;
+  latitude: number;
+  longitude: number;
+  order_note: string | null;
+  status: string;
+  total_amount: number | string;
+  payment_method: string;
+  payment_status: string;
+  estimated_delivery_date: string | null;
+  created_at: string;
+  updated_at: string;
+  order_items: ApiOrderItem[];
+}
+
+export function createOrder(payload: {
+  customer_name: string;
+  phone: string;
+  delivery_address: string;
+  latitude: number;
+  longitude: number;
+  order_note?: string | null;
+  payment_method?: string;
+}) {
+  return apiFetch<ApiOrder>(
+    "/orders/",
+    { method: "POST", body: JSON.stringify(payload) },
+    true
+  );
+}
+
+export function fetchMyOrders() {
+  return apiFetch<ApiOrder[]>("/orders/my", { method: "GET" }, true);
+}
+
+export function fetchMyOrder(orderId: number) {
+  return apiFetch<ApiOrder>(`/orders/${orderId}`, { method: "GET" }, true);
+}
+
+export function cancelOrder(orderId: number) {
+  return apiFetch<ApiOrder>(
+    `/orders/${orderId}/cancel`,
+    { method: "PATCH" },
+    true
+  );
+}
+
+export function fetchAllOrders() {
+  return apiFetch<ApiOrder[]>("/orders/", { method: "GET" }, true);
+}
+
+export function updateOrderStatus(orderId: number, status: string) {
+  return apiFetch<ApiOrder>(
+    `/orders/${orderId}/status`,
+    { method: "PATCH", body: JSON.stringify({ status }) },
+    true
+  );
+}
+
+/* ── Branches ─────────────────────────────────────────── */
 
 export interface ApiBranch {
   id: number;
@@ -70,19 +350,8 @@ export interface ApiBranch {
   active: boolean;
 }
 
-export interface ApiLoginResponse {
-  access_token: string;
-  token_type: string;
-  user: {
-    id: number;
-    name: string;
-    email: string;
-    role: string;
-  };
-}
-
-export function fetchAdminUsers() {
-  return apiFetch<ApiAdminUser[]>("/admin/users", { method: "GET" }, true);
+export function fetchBranches() {
+  return apiFetch<ApiBranch[]>("/branches/", { method: "GET" });
 }
 
 export function createBranch(payload: {
@@ -99,9 +368,89 @@ export function createBranch(payload: {
   );
 }
 
-export function loginWithApi(email: string, password: string) {
-  return apiFetch<ApiLoginResponse>("/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ email, password }),
+/* ── Branch stock ─────────────────────────────────────── */
+
+export interface ApiBranchStock {
+  id: number;
+  branch_id: number;
+  product_id: number;
+  quantity: number;
+  restock_quantity: number;
+  restock_date: string | null;
+}
+
+export function fetchBranchStock() {
+  return apiFetch<ApiBranchStock[]>("/branch-stock/", { method: "GET" }, true);
+}
+
+export function createBranchStock(payload: {
+  branch_id: number;
+  product_id: number;
+  quantity: number;
+  restock_quantity: number;
+  restock_date?: string | null;
+}) {
+  return apiFetch<ApiBranchStock>(
+    "/branch-stock/",
+    { method: "POST", body: JSON.stringify(payload) },
+    true
+  );
+}
+
+export function updateBranchStock(
+  stockId: number,
+  payload: {
+    quantity: number;
+    restock_quantity: number;
+    restock_date?: string | null;
+  }
+) {
+  return apiFetch<ApiBranchStock>(
+    `/branch-stock/${stockId}`,
+    { method: "PUT", body: JSON.stringify(payload) },
+    true
+  );
+}
+
+export function deleteBranchStock(stockId: number) {
+  return apiFetch<unknown>(`/branch-stock/${stockId}`, { method: "DELETE" }, true);
+}
+
+export function fetchStockAvailability(
+  branchId: number,
+  productId: number,
+  physicalQuantity: number
+) {
+  const q = new URLSearchParams({
+    physical_quantity: String(physicalQuantity),
   });
+  return apiFetch<{
+    branch_id: number;
+    product_id: number;
+    physical_quantity: number;
+    available_quantity: number;
+  }>(`/reservations/availability/${branchId}/${productId}?${q}`, {
+    method: "GET",
+  });
+}
+
+/* ── Admin users ──────────────────────────────────────── */
+
+export interface ApiAdminUser {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+}
+
+export function fetchAdminUsers() {
+  return apiFetch<ApiAdminUser[]>("/admin/users", { method: "GET" }, true);
+}
+
+export function updateUserRole(userId: number, role: string) {
+  return apiFetch<ApiAdminUser>(
+    `/admin/users/${userId}/role`,
+    { method: "PATCH", body: JSON.stringify({ role }) },
+    true
+  );
 }

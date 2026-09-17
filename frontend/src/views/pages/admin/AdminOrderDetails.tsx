@@ -1,15 +1,27 @@
 "use client";
 
-import React from "react";
-import type { Order, Page } from "@/lib/types";
-import { Card, StatusBadge, Badge, ScoreBar, Alert, IconArrowLeft, IconMapPin, IconBranch, IconCalendar } from "@/components/ui";
+import React, { useState } from "react";
+import type { Order, OrderStatus, Page } from "@/lib/types";
+import { Button, Card, StatusBadge, Badge, ScoreBar, Alert, Select, IconArrowLeft, IconMapPin, IconBranch, IconCalendar } from "@/components/ui";
 
 interface Props {
   order: Order;
   navigate: (page: Page) => void;
+  onStatusChange?: (orderId: string, status: OrderStatus) => Promise<void>;
 }
 
-export const AdminOrderDetails: React.FC<Props> = ({ order, navigate }) => {
+const STATUS_OPTIONS: OrderStatus[] = [
+  "ALLOCATED",
+  "PROCESSING",
+  "OUT_FOR_DELIVERY",
+  "DELIVERED",
+  "CANCELLED",
+];
+
+export const AdminOrderDetails: React.FC<Props> = ({ order, navigate, onStatusChange }) => {
+  const [status, setStatus] = useState<OrderStatus>(order.status);
+  const [saving, setSaving] = useState(false);
+  const [statusError, setStatusError] = useState("");
   const { allocation: alloc } = order;
   const distancePct = alloc.distanceScore;
   const workloadPct = alloc.workloadScore;
@@ -26,11 +38,46 @@ export const AdminOrderDetails: React.FC<Props> = ({ order, navigate }) => {
           <p className="font-mono-data text-sm text-[#94A3B8]">Order ID</p>
           <h1 className="font-display text-2xl font-bold text-[#0F172A]">{order.id}</h1>
         </div>
-        <div className="flex items-center gap-2">
-          <StatusBadge status={order.status} />
+        <div className="flex items-center gap-2 flex-wrap">
+          <StatusBadge status={status} />
           <StatusBadge status={order.paymentStatus} />
+          {onStatusChange && (
+            <div className="flex items-center gap-2">
+              <Select
+                label=""
+                value={status}
+                onChange={(e) => setStatus(e.target.value as OrderStatus)}
+                options={STATUS_OPTIONS.map((s) => ({
+                  value: s,
+                  label: s.replace(/_/g, " "),
+                }))}
+              />
+              <Button
+                size="sm"
+                loading={saving}
+                onClick={async () => {
+                  setSaving(true);
+                  setStatusError("");
+                  try {
+                    await onStatusChange(order.id, status);
+                  } catch (err) {
+                    setStatusError(
+                      err instanceof Error ? err.message : "Update failed."
+                    );
+                    setStatus(order.status);
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+              >
+                Update
+              </Button>
+            </div>
+          )}
         </div>
       </div>
+
+      {statusError && <Alert variant="danger">{statusError}</Alert>}
 
       <div className="grid lg:grid-cols-3 gap-5">
         {/* Left: Customer + Delivery + Products */}

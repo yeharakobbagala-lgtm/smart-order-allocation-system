@@ -1,16 +1,16 @@
 "use client";
 
 import React, { useState } from "react";
-import type { Order, Page } from "@/lib/types";
-import { Card, StatusBadge, EmptyState, IconSearch, IconFilter, IconPackage, IconEye } from "@/components/ui";
-import { MOCK_BRANCHES } from "@/lib/data";
+import type { Branch, Order, Page } from "@/lib/types";
+import { Card, StatusBadge, EmptyState, IconSearch, IconPackage, IconEye } from "@/components/ui";
 
 interface Props {
   orders: Order[];
+  branches: Branch[];
   navigate: (page: Page, id?: string) => void;
 }
 
-export const AdminOrders: React.FC<Props> = ({ orders, navigate }) => {
+export const AdminOrders: React.FC<Props> = ({ orders, branches, navigate }) => {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [branchFilter, setBranchFilter] = useState("all");
@@ -57,7 +57,7 @@ export const AdminOrders: React.FC<Props> = ({ orders, navigate }) => {
             className="appearance-none px-4 py-2.5 rounded-xl border border-[#E2E8F0] bg-white text-sm text-[#334155] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/30"
           >
             <option value="all">All Branches</option>
-            {MOCK_BRANCHES.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            {branches.filter((b) => b.active).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
         </div>
       </Card>

@@ -4,10 +4,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 
-# Find the project root
 BASE_DIR = Path(__file__).resolve().parents[3]
-
-# Load environment variables
 load_dotenv(BASE_DIR / ".env")
 
 
@@ -21,6 +18,12 @@ class Settings:
     JWT_SECRET: str = os.getenv("JWT_SECRET", "")
     JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
     JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "60"))
+
+    # Comma-separated frontend origins for CORS
+    CORS_ORIGINS: str = os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:3000,http://127.0.0.1:3000",
+    )
 
 
 settings = Settings()

@@ -7,24 +7,35 @@ import { Button, Card, StatusBadge, OrderTimeline, Modal, Alert, IconArrowLeft, 
 interface Props {
   order: Order;
   navigate: (page: Page) => void;
+  onCancelOrder?: (orderId: string) => Promise<void>;
 }
 
 const canCancel = (status: string) => status === "ALLOCATED" || status === "PROCESSING";
 
-export const OrderDetails: React.FC<Props> = ({ order, navigate }) => {
+export const OrderDetails: React.FC<Props> = ({ order, navigate, onCancelOrder }) => {
   const [cancelModal, setCancelModal] = useState(false);
   const [cancelling, setCancelling] = useState(false);
-  const [cancelled, setCancelled] = useState(false);
+  const [cancelError, setCancelError] = useState("");
+  const [localStatus, setLocalStatus] = useState<string | null>(null);
+
+  const displayStatus = localStatus ?? order.status;
 
   const handleCancel = async () => {
+    if (!onCancelOrder) return;
     setCancelling(true);
-    await new Promise((r) => setTimeout(r, 1200));
-    setCancelling(false);
-    setCancelModal(false);
-    setCancelled(true);
+    setCancelError("");
+    try {
+      await onCancelOrder(order.id);
+      setLocalStatus("CANCELLED");
+      setCancelModal(false);
+    } catch (err) {
+      setCancelError(
+        err instanceof Error ? err.message : "Could not cancel order."
+      );
+    } finally {
+      setCancelling(false);
+    }
   };
-
-  const displayStatus = cancelled ? "CANCELLED" : order.status;
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
@@ -43,7 +54,7 @@ export const OrderDetails: React.FC<Props> = ({ order, navigate }) => {
         <div className="flex items-center gap-2">
           <StatusBadge status={displayStatus} />
           <StatusBadge status={order.paymentStatus} />
-          {canCancel(displayStatus) && (
+          {canCancel(displayStatus) && onCancelOrder && (
             <Button variant="danger" size="sm" onClick={() => setCancelModal(true)}>
               Cancel Order
             </Button>
@@ -51,29 +62,26 @@ export const OrderDetails: React.FC<Props> = ({ order, navigate }) => {
         </div>
       </div>
 
-      {cancelled && (
+      {displayStatus === "CANCELLED" && localStatus === "CANCELLED" && (
         <Alert variant="success" className="mb-6">Your order has been successfully cancelled.</Alert>
       )}
 
-      {/* Timeline */}
       <Card className="p-6 mb-6">
         <h2 className="font-display font-bold text-[#0F172A] mb-5">Order Status</h2>
         <OrderTimeline status={displayStatus} />
       </Card>
 
       <div className="grid lg:grid-cols-3 gap-5 mb-5">
-        {/* Delivery Info */}
         <Card className="p-5">
           <h2 className="font-display font-semibold text-[#0F172A] mb-3 flex items-center gap-2">
             <IconMapPin size={16} className="text-[#4F46E5]" />
             Delivery Address
           </h2>
           <p className="text-sm font-medium text-[#0F172A]">{order.address}</p>
-          <p className="text-sm text-[#64748B]">{order.city}</p>
-          {order.note && <p className="text-xs text-[#94A3B8] mt-2 italic">"{order.note}"</p>}
+          {order.city && <p className="text-sm text-[#64748B]">{order.city}</p>}
+          {order.note && <p className="text-xs text-[#94A3B8] mt-2 italic">&quot;{order.note}&quot;</p>}
         </Card>
 
-        {/* Branch */}
         <Card className="p-5">
           <h2 className="font-display font-semibold text-[#0F172A] mb-3 flex items-center gap-2">
             <IconBranch size={16} className="text-[#4F46E5]" />
@@ -83,20 +91,20 @@ export const OrderDetails: React.FC<Props> = ({ order, navigate }) => {
           <p className="text-xs text-[#94A3B8] mt-0.5">Auto-allocated by SmartOrder</p>
         </Card>
 
-        {/* Delivery date */}
         <Card className="p-5">
           <h2 className="font-display font-semibold text-[#0F172A] mb-3 flex items-center gap-2">
             <IconCalendar size={16} className="text-[#4F46E5]" />
             Estimated Delivery
           </h2>
           <p className="text-sm font-medium text-[#10B981]">
-            {new Date(order.estimatedDelivery).toLocaleDateString("en-US", { weekday: "short", month: "long", day: "numeric" })}
+            {order.estimatedDelivery
+              ? new Date(order.estimatedDelivery).toLocaleDateString("en-US", { weekday: "short", month: "long", day: "numeric" })
+              : "Pending"}
           </p>
           <p className="text-xs text-[#94A3B8] mt-0.5">Cash on Delivery — {order.paymentStatus === "PAID" ? "Paid" : "Pending"}</p>
         </Card>
       </div>
 
-      {/* Items */}
       <Card className="overflow-hidden mb-5">
         <div className="px-5 py-4 border-b border-[#E2E8F0]">
           <h2 className="font-display font-bold text-[#0F172A]">Order Items</h2>
@@ -119,16 +127,16 @@ export const OrderDetails: React.FC<Props> = ({ order, navigate }) => {
         </div>
       </Card>
 
-      {/* Cancellation Modal */}
       <Modal open={cancelModal} onClose={() => setCancelModal(false)} title="Cancel Order" size="sm">
         <p className="text-[#64748B] mb-5">
           Are you sure you want to cancel order <strong className="text-[#0F172A]">{order.id}</strong>? This action cannot be undone.
         </p>
+        {cancelError && <Alert variant="danger" className="mb-4">{cancelError}</Alert>}
         <Alert variant="warning" className="mb-5">
           Once cancelled, reserved stock will be released and the order cannot be reinstated.
         </Alert>
         <div className="flex gap-3">
-          <Button variant="danger" loading={cancelling} onClick={handleCancel} className="flex-1">
+          <Button variant="danger" loading={cancelling} onClick={() => void handleCancel()} className="flex-1">
             Yes, cancel order
           </Button>
           <Button variant="outline" onClick={() => setCancelModal(false)} className="flex-1">

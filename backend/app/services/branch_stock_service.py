@@ -76,10 +76,13 @@ def create_stock(
             detail="Stock already exists for this product at this branch."
         )
 
+    # Create stock record
     stock = BranchStock(
         branch_id=data.branch_id,
         product_id=data.product_id,
-        quantity=data.quantity
+        quantity=data.quantity,
+        restock_quantity=data.restock_quantity,
+        restock_date=data.restock_date,
     )
 
     return create_stock_repository(
@@ -105,7 +108,10 @@ def update_stock(
             detail="Stock record not found."
         )
 
+    # Update stock details
     stock.quantity = data.quantity
+    stock.restock_quantity = data.restock_quantity
+    stock.restock_date = data.restock_date
 
     return update_stock_repository(
         db,

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database.dependencies import get_db
+from app.repositories.user_repository import get_user_by_id
 from app.schemas.auth import (
     LoginRequest,
     LoginResponse,
@@ -70,9 +71,25 @@ def login(
             detail="Invalid email or password.",
         )
 
-@router.get("/me")
-def get_me(current_user: dict = Depends(get_current_user)):
-    return current_user
+
+@router.get("/me", response_model=UserResponse)
+def get_me(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    user = get_user_by_id(db, current_user["user_id"])
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found.",
+        )
+    return UserResponse(
+        id=user.id,
+        name=user.name,
+        email=user.email,
+        role=user.role,
+    )
+
 
 @router.get("/admin-test")
 def admin_test(current_user: dict = Depends(require_admin)):

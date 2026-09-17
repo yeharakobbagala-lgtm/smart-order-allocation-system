@@ -83,6 +83,7 @@ export interface Order {
 }
 
 export interface CartItem {
+  cartItemId: string;
   product: Product;
   quantity: number;
 }

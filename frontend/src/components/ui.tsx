@@ -320,6 +320,22 @@ export const LoadingState: React.FC<{ message?: string }> = ({ message = "Loadin
   </div>
 );
 
+export const ErrorState: React.FC<{
+  message: string;
+  onRetry?: () => void;
+}> = ({ message, onRetry }) => (
+  <div className="flex flex-col items-center justify-center py-16 gap-4 text-center max-w-md mx-auto">
+    <Alert variant="danger" className="w-full text-left">
+      {message}
+    </Alert>
+    {onRetry && (
+      <Button variant="secondary" onClick={onRetry}>
+        Try again
+      </Button>
+    )}
+  </div>
+);
+
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 export const Skeleton: React.FC<{ className?: string }> = ({ className = "" }) => (
   <div className={`bg-[#F1F5F9] rounded-lg animate-pulse ${className}`} />

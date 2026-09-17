@@ -2,8 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { User, UserRole } from "@/lib/types";
-import { MOCK_USERS } from "@/lib/data";
-import { fetchAdminUsers, getApiBaseUrl, getAccessToken } from "@/lib/api";
+import { fetchAdminUsers, getApiBaseUrl } from "@/lib/api";
 import {
   Button,
   Card,
@@ -54,24 +53,25 @@ export const AdminUsers: React.FC<{ currentUser: User }> = ({ currentUser }) => 
   const loadUsers = useCallback(async () => {
     setLoading(true);
     setLoadError("");
-    const canCallApi = Boolean(getApiBaseUrl() && getAccessToken());
-    if (canCallApi) {
-      try {
-        const data = await fetchAdminUsers();
-        setUsers(data.map(mapApiUser));
-        setLoading(false);
-        return;
-      } catch (err) {
-        setLoadError(
-          err instanceof Error
-            ? err.message
-            : "Failed to load users from the API."
-        );
-      }
+    if (!getApiBaseUrl()) {
+      setLoadError("Set NEXT_PUBLIC_API_URL to load users from the API.");
+      setUsers([]);
+      setLoading(false);
+      return;
     }
-    // Fallback to existing local dataset when API/token is unavailable
-    setUsers(MOCK_USERS);
-    setLoading(false);
+    try {
+      const data = await fetchAdminUsers();
+      setUsers(data.map(mapApiUser));
+    } catch (err) {
+      setLoadError(
+        err instanceof Error
+          ? err.message
+          : "Failed to load users from the API."
+      );
+      setUsers([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -181,7 +181,7 @@ export const AdminUsers: React.FC<{ currentUser: User }> = ({ currentUser }) => 
       </Alert>
 
       {loadError ? (
-        <Alert variant="warning" title="Using local user data">
+        <Alert variant="danger" title="Could not load users">
           {loadError}
         </Alert>
       ) : null}

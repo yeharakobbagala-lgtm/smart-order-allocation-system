@@ -5,6 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database.base import Base
 if TYPE_CHECKING:
     from app.models.branch_stock import BranchStock
+    from app.models.order import Order
 
 class Branch(Base):
     __tablename__ = "branches"
@@ -19,5 +20,10 @@ class Branch(Base):
 
     stock: Mapped[list["BranchStock"]] = relationship(
     "BranchStock",
+    back_populates="branch"
+)
+
+    orders: Mapped[list["Order"]] = relationship(
+    "Order",
     back_populates="branch"
 )

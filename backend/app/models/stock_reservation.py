@@ -5,69 +5,143 @@ from sqlalchemy import DateTime, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
+
+
 if TYPE_CHECKING:
     from app.models.user import User
     from app.models.cart import Cart
     from app.models.branch import Branch
     from app.models.product import Product
+    from app.models.order import Order
 
 
 class StockReservation(Base):
     __tablename__ = "stock_reservations"
 
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    # =========================================================
+    # PRIMARY KEY
+    # =========================================================
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+        index=True,
+    )
+
+    # =========================================================
+    # USER
+    # =========================================================
 
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id"),
-        nullable=False
+        nullable=False,
     )
+
+    # =========================================================
+    # CART
+    # =========================================================
 
     cart_id: Mapped[int] = mapped_column(
         ForeignKey("carts.id"),
-        nullable=False
+        nullable=False,
     )
+
+    # =========================================================
+    # ORDER
+    # =========================================================
+
+    order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("orders.id"),
+        nullable=True,
+    )
+
+    # =========================================================
+    # BRANCH
+    # =========================================================
 
     branch_id: Mapped[int] = mapped_column(
         ForeignKey("branches.id"),
-        nullable=False
+        nullable=False,
     )
+
+    # =========================================================
+    # PRODUCT
+    # =========================================================
 
     product_id: Mapped[int] = mapped_column(
         ForeignKey("products.id"),
-        nullable=False
+        nullable=False,
     )
 
+    # =========================================================
+    # QUANTITY
+    # =========================================================
+
     quantity: Mapped[int] = mapped_column(
-        nullable=False
+        nullable=False,
     )
+
+    # =========================================================
+    # RESERVATION TIME
+    # =========================================================
 
     reserved_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.utcnow
+        default=datetime.utcnow,
     )
 
-    expires_at: Mapped[datetime] = mapped_column(
+    expires_at: Mapped[datetime | None] = mapped_column(
         DateTime,
-        nullable=False
+        nullable=True,
     )
+
+    # =========================================================
+    # STATUS
+    # =========================================================
+    #
+    # ACTIVE
+    # EXPIRED
+    # CANCELLED
+    #
 
     status: Mapped[str] = mapped_column(
         String(20),
-        default="ACTIVE"
+        default="ACTIVE",
     )
 
+    # =========================================================
+    # RESERVATION TYPE
+    # =========================================================
+    #
+    # TEMPORARY = 10-minute checkout reservation
+    # CURRENT   = confirmed order using current physical stock
+    # FUTURE    = confirmed order waiting for restock
+    #
+
+    reservation_type: Mapped[str] = mapped_column(
+        String(20),
+        default="TEMPORARY",
+    )
+
+    # =========================================================
+    # RELATIONSHIPS
+    # =========================================================
+
     user: Mapped["User"] = relationship(
-    "User"
-)
+        "User",
+    )
 
-cart: Mapped["Cart"] = relationship(
-    "Cart"
-)
+    cart: Mapped["Cart"] = relationship(
+        "Cart",
+    )
 
-branch: Mapped["Branch"] = relationship(
-    "Branch"
-)
+    order: Mapped["Order | None"] = relationship(
+        "Order",
+    )
 
-product: Mapped["Product"] = relationship(
-    "Product"
-)
+    branch: Mapped["Branch"] = relationship(
+        "Branch",
+    )
+
+    product: Mapped["Product"] = relationship(
+        "Product",
+    )
