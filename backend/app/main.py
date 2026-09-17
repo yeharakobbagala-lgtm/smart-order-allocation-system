@@ -71,18 +71,13 @@ def root():
 
 @app.get("/health/db")
 def health_db():
-    """Temporary diagnostic for Railway DB connectivity (no secrets)."""
+    """DB connectivity check for deployment diagnostics (no secrets)."""
     env_present = {
         "DB_HOST": bool(settings.DB_HOST),
         "DB_PORT": bool(os.getenv("DB_PORT")),
         "DB_NAME": bool(settings.DB_NAME),
         "DB_USER": bool(settings.DB_USER),
         "DB_PASSWORD": bool(settings.DB_PASSWORD),
-        "MYSQLHOST": bool(os.getenv("MYSQLHOST")),
-        "MYSQLPORT": bool(os.getenv("MYSQLPORT")),
-        "MYSQLDATABASE": bool(os.getenv("MYSQLDATABASE")),
-        "MYSQLUSER": bool(os.getenv("MYSQLUSER")),
-        "MYSQLPASSWORD": bool(os.getenv("MYSQLPASSWORD")),
     }
 
     try:
