@@ -72,22 +72,45 @@ def root():
 @app.get("/health/db")
 def health_db():
     """DB connectivity check for deployment diagnostics (no secrets)."""
+    from app.config.settings import BACKEND_ROOT, REPO_ROOT
+
+    def present(name: str) -> dict[str, bool]:
+        return {
+            "in_environ": name in os.environ,
+            "nonempty": bool(os.getenv(name)),
+        }
+
+    repo_resolved = REPO_ROOT.resolve()
     env_present = {
+        "DB_HOST": present("DB_HOST"),
+        "DB_PORT": present("DB_PORT"),
+        "DB_NAME": present("DB_NAME"),
+        "DB_USER": present("DB_USER"),
+        "DB_PASSWORD": present("DB_PASSWORD"),
+        "MYSQLHOST": present("MYSQLHOST"),
+    }
+    settings_nonempty = {
         "DB_HOST": bool(settings.DB_HOST),
-        "DB_PORT": bool(os.getenv("DB_PORT")),
+        "DB_PORT": bool(settings.DB_PORT),
         "DB_NAME": bool(settings.DB_NAME),
         "DB_USER": bool(settings.DB_USER),
         "DB_PASSWORD": bool(settings.DB_PASSWORD),
+    }
+    meta = {
+        "env_present": env_present,
+        "settings_nonempty": settings_nonempty,
+        "repo_root_is_filesystem_root": repo_resolved.parent == repo_resolved,
+        "backend_root_name": BACKEND_ROOT.name,
     }
 
     try:
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
-        return {"ok": True, "env_present": env_present}
+        return {"ok": True, **meta}
     except Exception as exc:
         return {
             "ok": False,
             "error_type": type(exc).__name__,
             "error": _redact_db_error(str(exc)),
-            "env_present": env_present,
+            **meta,
         }
