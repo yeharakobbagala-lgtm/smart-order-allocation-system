@@ -17,7 +17,6 @@ from app.services.stock_reservation_service import (
     cancel_reservation,
     convert_reservation_to_order,
     create_temporary_reservation,
-    get_available_physical_stock,
     get_remaining_restock_quantity,
 )
 from app.utils.allocation import (
@@ -369,6 +368,58 @@ def _validate_hold_reservations(
     return reservations
 
 
+def resolve_confirm_reservation_type(
+    *,
+    physical_quantity: int,
+    requested_quantity: int,
+    remaining_restock: int,
+    restock_date: datetime | None,
+    product_id: int,
+    now: datetime | None = None,
+) -> str:
+    """
+    Decide CURRENT vs FUTURE for one confirm line item.
+
+    CURRENT: physical stock covers the request (caller deducts physical).
+    FUTURE: physical is short, but scheduled restock within 7 days covers it
+            (physical is left unchanged).
+    """
+    if now is None:
+        now = utc_now_naive()
+
+    if physical_quantity >= requested_quantity:
+        return "CURRENT"
+
+    if restock_date is None or remaining_restock <= 0:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Product {product_id} is unavailable; "
+                "restock is missing or insufficient."
+            ),
+        )
+
+    if physical_quantity + remaining_restock < requested_quantity:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Product {product_id} is unavailable; "
+                "restock is insufficient."
+            ),
+        )
+
+    if restock_date > now + timedelta(days=7):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Product {product_id} is unavailable; "
+                "its restock is too late."
+            ),
+        )
+
+    return "FUTURE"
+
+
 def confirm_checkout_hold(
     db: Session,
     user_id: int,
@@ -473,15 +524,6 @@ def confirm_checkout_hold(
                     ),
                 )
 
-            # Available excludes other TEMPORARY holds; add back our own
-            available_quantity = get_available_physical_stock(
-                db=db,
-                branch_id=branch_id,
-                product_id=cart_item.product_id,
-                physical_quantity=stock.quantity,
-            )
-            available_quantity += reservation.quantity
-
             remaining_restock = get_remaining_restock_quantity(
                 db=db,
                 branch_id=branch_id,
@@ -489,8 +531,10 @@ def confirm_checkout_hold(
                 restock_quantity=stock.restock_quantity,
             )
 
+            # Use truthful physical quantity — do not treat our TEMPORARY
+            # hold as if physical stock already exists.
             stock_wait = calculate_stock_wait(
-                available_quantity=available_quantity,
+                available_quantity=stock.quantity,
                 requested_quantity=cart_item.quantity,
                 restock_quantity=remaining_restock,
                 restock_date=stock.restock_date,
@@ -500,27 +544,24 @@ def confirm_checkout_hold(
                 raise HTTPException(
                     status_code=409,
                     detail=(
-                        f"Product {cart_item.product_id} "
-                        "is no longer available."
+                        f"Product {cart_item.product_id} is unavailable; "
+                        "restock is missing or insufficient."
                     ),
                 )
 
-            if available_quantity >= cart_item.quantity:
-                reservation_type = "CURRENT"
-                # Decrement physical stock for in-stock fulfillment.
+            reservation_type = resolve_confirm_reservation_type(
+                physical_quantity=stock.quantity,
+                requested_quantity=cart_item.quantity,
+                remaining_restock=remaining_restock,
+                restock_date=stock.restock_date,
+                product_id=cart_item.product_id,
+            )
+
+            if reservation_type == "CURRENT":
+                # Decrement physical for in-stock fulfillment only.
                 # CURRENT will not reduce available again (TEMPORARY-only).
-                if stock.quantity < cart_item.quantity:
-                    raise HTTPException(
-                        status_code=409,
-                        detail=(
-                            f"Product {cart_item.product_id} "
-                            "has insufficient physical stock."
-                        ),
-                    )
                 stock.quantity -= cart_item.quantity
-            else:
-                reservation_type = "FUTURE"
-                # FUTURE commits restock pool only — physical unchanged
+            # FUTURE commits restock pool only — physical unchanged
 
             order_item = OrderItem(
                 order_id=order.id,
@@ -562,5 +603,6 @@ def confirm_checkout_hold(
 __all__ = [
     "create_checkout_hold",
     "confirm_checkout_hold",
+    "resolve_confirm_reservation_type",
     "TEMPORARY_RESERVATION_MINUTES",
 ]
