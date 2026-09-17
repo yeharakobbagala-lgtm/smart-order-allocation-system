@@ -174,6 +174,16 @@ def create_order(
 
             if available_quantity >= cart_item.quantity:
                 reservation_type = "CURRENT"
+                if stock.quantity < cart_item.quantity:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            f"Product {cart_item.product_id} "
+                            "has insufficient physical stock."
+                        ),
+                    )
+                # Decrement physical; CURRENT does not re-block available.
+                stock.quantity -= cart_item.quantity
             else:
                 reservation_type = "FUTURE"
 
@@ -187,7 +197,7 @@ def create_order(
 
             db.add(order_item)
 
-            # Create permanent reservation
+            # Create permanent reservation (operational link to order)
             reservation = StockReservation(
                 user_id=user_id,
                 cart_id=cart.id,

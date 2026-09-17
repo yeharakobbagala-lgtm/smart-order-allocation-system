@@ -276,6 +276,10 @@ def _validate_hold_reservations(
     db: Session,
     hold: CheckoutHold,
 ) -> list[StockReservation]:
+    """
+    Validate hold + TEMPORARY reservations.
+    Does not commit — caller owns the transaction.
+    """
     now = utc_now_naive()
 
     if hold.status != "ACTIVE":
@@ -286,7 +290,6 @@ def _validate_hold_reservations(
 
     if hold.expires_at <= now:
         hold.status = "EXPIRED"
-        db.commit()
         raise HTTPException(
             status_code=409,
             detail="Reservation has expired.",
@@ -302,12 +305,12 @@ def _validate_hold_reservations(
             StockReservation.reservation_type == "TEMPORARY",
             StockReservation.order_id.is_(None),
         )
+        .with_for_update()
         .all()
     )
 
     if not reservations:
         hold.status = "EXPIRED"
-        db.commit()
         raise HTTPException(
             status_code=409,
             detail="Reservation has expired.",
@@ -317,7 +320,6 @@ def _validate_hold_reservations(
         if reservation.expires_at is not None and reservation.expires_at <= now:
             reservation.status = "EXPIRED"
             hold.status = "EXPIRED"
-            db.commit()
             raise HTTPException(
                 status_code=409,
                 detail="Reservation has expired.",
@@ -333,6 +335,7 @@ def _validate_hold_reservations(
         db.query(Cart)
         .options(joinedload(Cart.items))
         .filter(Cart.id == hold.cart_id)
+        .with_for_update()
         .first()
     )
 
@@ -368,12 +371,19 @@ def confirm_checkout_hold(
     user_id: int,
     hold_id: int,
 ) -> Order:
+    """
+    Atomically confirm a checkout hold:
+
+    validate → lock stock → create order/items → decrease physical
+    → convert TEMPORARY → CURRENT/FUTURE → mark hold → clear cart → COMMIT
+    """
     hold = (
         db.query(CheckoutHold)
         .filter(
             CheckoutHold.id == hold_id,
             CheckoutHold.user_id == user_id,
         )
+        .with_for_update()
         .first()
     )
 
@@ -383,27 +393,28 @@ def confirm_checkout_hold(
             detail="Checkout reservation not found.",
         )
 
-    reservations = _validate_hold_reservations(db, hold)
+    try:
+        reservations = _validate_hold_reservations(db, hold)
 
-    cart = (
-        db.query(Cart)
-        .options(joinedload(Cart.items).joinedload(CartItem.product))
-        .filter(Cart.id == hold.cart_id, Cart.user_id == user_id)
-        .first()
-    )
-
-    if not cart or not cart.items:
-        raise HTTPException(
-            status_code=409,
-            detail="Cart is empty.",
+        cart = (
+            db.query(Cart)
+            .options(joinedload(Cart.items).joinedload(CartItem.product))
+            .filter(Cart.id == hold.cart_id, Cart.user_id == user_id)
+            .with_for_update()
+            .first()
         )
 
-    branch_id = hold.branch_id
-    reservation_by_product = {
-        r.product_id: r for r in reservations
-    }
+        if not cart or not cart.items:
+            raise HTTPException(
+                status_code=409,
+                detail="Cart is empty.",
+            )
 
-    try:
+        branch_id = hold.branch_id
+        reservation_by_product = {
+            r.product_id: r for r in reservations
+        }
+
         order = Order(
             user_id=user_id,
             branch_id=branch_id,
@@ -459,13 +470,13 @@ def confirm_checkout_hold(
                     ),
                 )
 
+            # Available excludes other TEMPORARY holds; add back our own
             available_quantity = get_available_physical_stock(
                 db=db,
                 branch_id=branch_id,
                 product_id=cart_item.product_id,
                 physical_quantity=stock.quantity,
             )
-            # Add back this hold's temporary quantity for CURRENT/FUTURE decision
             available_quantity += reservation.quantity
 
             remaining_restock = get_remaining_restock_quantity(
@@ -491,11 +502,22 @@ def confirm_checkout_hold(
                     ),
                 )
 
-            reservation_type = (
-                "CURRENT"
-                if available_quantity >= cart_item.quantity
-                else "FUTURE"
-            )
+            if available_quantity >= cart_item.quantity:
+                reservation_type = "CURRENT"
+                # Decrement physical stock for in-stock fulfillment.
+                # CURRENT will not reduce available again (TEMPORARY-only).
+                if stock.quantity < cart_item.quantity:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            f"Product {cart_item.product_id} "
+                            "has insufficient physical stock."
+                        ),
+                    )
+                stock.quantity -= cart_item.quantity
+            else:
+                reservation_type = "FUTURE"
+                # FUTURE commits restock pool only — physical unchanged
 
             order_item = OrderItem(
                 order_id=order.id,
@@ -505,14 +527,12 @@ def confirm_checkout_hold(
             )
             db.add(order_item)
 
-            # Flush so convert_reservation_to_order can attach order_id
-            db.flush()
-
             convert_reservation_to_order(
                 db=db,
                 reservation=reservation,
                 order_id=order.id,
                 reservation_type=reservation_type,
+                commit=False,
             )
 
         hold.status = "CONFIRMED"

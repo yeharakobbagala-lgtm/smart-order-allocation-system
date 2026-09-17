@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.models.stock_reservation import StockReservation
 
 from app.repositories.stock_reservation_repository import (
-    get_active_current_reserved_quantity,
+    get_active_temporary_reserved_quantity,
     get_active_future_committed_quantity,
 )
 from app.utils.datetime_utc import utc_now_naive
@@ -30,15 +30,17 @@ def get_available_physical_stock(
     physical_quantity: int,
 ):
     """
-    Calculate stock that is currently available.
+    Calculate stock that is currently available for new allocation.
 
-    Available stock =
+    Available =
         Physical stock
-        - ACTIVE TEMPORARY reservations
-        - ACTIVE CURRENT reservations
+        - ACTIVE unexpired TEMPORARY reservations
+
+    CURRENT reservations do not reduce available again: confirmed
+    purchases already decremented physical stock.
     """
 
-    reserved_quantity = get_active_current_reserved_quantity(
+    reserved_quantity = get_active_temporary_reserved_quantity(
         db=db,
         branch_id=branch_id,
         product_id=product_id,
@@ -137,20 +139,16 @@ def convert_reservation_to_order(
     reservation: StockReservation,
     order_id: int,
     reservation_type: str,
+    *,
+    commit: bool = True,
 ):
     """
-    Convert a TEMPORARY reservation into:
-
-        CURRENT
-        or
-        FUTURE
-
+    Convert a TEMPORARY reservation into CURRENT or FUTURE
     after the customer confirms the order.
-    """
 
-    # -----------------------------------------------------
-    # Check status
-    # -----------------------------------------------------
+    When commit=False, the caller owns the transaction
+    (used by atomic checkout confirm).
+    """
 
     if reservation.status != "ACTIVE":
         raise HTTPException(
@@ -158,19 +156,11 @@ def convert_reservation_to_order(
             detail="Reservation is no longer active.",
         )
 
-    # -----------------------------------------------------
-    # Only TEMPORARY reservations can be converted
-    # -----------------------------------------------------
-
     if reservation.reservation_type != "TEMPORARY":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only temporary reservations can be converted.",
         )
-
-    # -----------------------------------------------------
-    # Check expiration
-    # -----------------------------------------------------
 
     if reservation.expires_at is not None:
 
@@ -178,16 +168,13 @@ def convert_reservation_to_order(
 
             reservation.status = "EXPIRED"
 
-            db.commit()
+            if commit:
+                db.commit()
 
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Reservation has expired.",
             )
-
-    # -----------------------------------------------------
-    # Validate reservation type
-    # -----------------------------------------------------
 
     if reservation_type not in [
         "CURRENT",
@@ -198,26 +185,13 @@ def convert_reservation_to_order(
             detail="Invalid reservation type.",
         )
 
-    # -----------------------------------------------------
-    # Attach reservation to order
-    # -----------------------------------------------------
-
     reservation.order_id = order_id
-
-    # -----------------------------------------------------
-    # Change reservation type
-    # -----------------------------------------------------
-
     reservation.reservation_type = reservation_type
-
-    # -----------------------------------------------------
-    # Permanent reservations don't expire
-    # -----------------------------------------------------
-
     reservation.expires_at = None
 
-    db.commit()
-    db.refresh(reservation)
+    if commit:
+        db.commit()
+        db.refresh(reservation)
 
     return reservation
 

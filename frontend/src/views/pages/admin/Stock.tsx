@@ -16,7 +16,6 @@ import { mapApiProduct } from "@/lib/mappers";
 import {
   Button,
   Card,
-  Badge,
   Modal,
   Input,
   LoadingState,
@@ -28,7 +27,7 @@ import {
 } from "@/components/ui";
 
 interface StockRow {
-  id: number | null;
+  id: number;
   branchId: string;
   productId: string;
   physical: number;
@@ -50,6 +49,12 @@ export const AdminStock: React.FC = () => {
     productName: string;
     branchName: string;
   } | null>(null);
+  const [createModal, setCreateModal] = useState<{
+    branchId: string;
+    productId: string;
+    productName: string;
+    branchName: string;
+  } | null>(null);
   const [addModal, setAddModal] = useState(false);
   const [form, setForm] = useState({
     branchId: "",
@@ -63,13 +68,18 @@ export const AdminStock: React.FC = () => {
     restockQuantity: "",
     restockDate: "",
   });
+  const [createForm, setCreateForm] = useState({
+    quantity: "",
+    restockQuantity: "",
+    restockDate: "",
+  });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
 
   const loadAvailability = useCallback(async (rows: StockRow[]) => {
+    const withIds = rows.filter((r) => r.id != null);
     const updated = await Promise.all(
-      rows.map(async (row) => {
-        if (row.physical <= 0) return { ...row, available: row.physical };
+      withIds.map(async (row) => {
         try {
           const avail = await fetchStockAvailability(
             Number(row.branchId),
@@ -82,23 +92,9 @@ export const AdminStock: React.FC = () => {
         }
       })
     );
-    // Merge into existing state — never replace the full list with a partial
-    // subset (that drops stock IDs and causes edit to POST instead of PUT).
     setStock((prev) => {
-      const byKey = new Map<string, (typeof updated)[number]>(
-        updated.map((r) => [`${r.branchId}:${r.productId}`, r])
-      );
-      const merged = prev.map((r) => {
-        const key = `${r.branchId}:${r.productId}`;
-        return byKey.get(key) ?? r;
-      });
-      for (const r of updated) {
-        const key = `${r.branchId}:${r.productId}`;
-        if (!prev.some((p) => `${p.branchId}:${p.productId}` === key)) {
-          merged.push(r);
-        }
-      }
-      return merged;
+      const byId = new Map(updated.map((r) => [r.id, r]));
+      return prev.map((r) => byId.get(r.id) ?? r);
     });
   }, []);
 
@@ -127,6 +123,7 @@ export const AdminStock: React.FC = () => {
           }))
       );
       setProducts(apiProducts.filter((p) => p.active).map(mapApiProduct));
+      // Only real API rows — never invent placeholders
       const rows: StockRow[] = apiStock.map((s) => ({
         id: s.id,
         branchId: String(s.branch_id),
@@ -169,42 +166,58 @@ export const AdminStock: React.FC = () => {
   const findStock = (branchId: string, productId: string) =>
     stock.find((s) => s.branchId === branchId && s.productId === productId);
 
-  const getStock = (branchId: string, productId: string): StockRow => {
-    return (
-      findStock(branchId, productId) ?? {
-        id: null,
-        branchId,
-        productId,
-        physical: 0,
-        restockQuantity: 0,
-        restockDate: null,
-        available: null,
-      }
-    );
-  };
-
   const reservedDisplay = (entry: StockRow) => {
     if (entry.available == null) return "—";
     return Math.max(0, entry.physical - entry.available);
   };
 
-  const availableDisplay = (entry: StockRow) => {
-    if (entry.available == null) return null;
-    return entry.available;
-  };
+  const availableColor = (avail: number) =>
+    avail === 0
+      ? "text-[#EF4444] bg-[#FEF2F2] border-[#FECACA]"
+      : avail < 10
+        ? "text-[#92400E] bg-[#FFFBEB] border-[#FDE68A]"
+        : "text-[#065F46] bg-[#ECFDF5] border-[#A7F3D0]";
 
-  const openEdit = (entry: StockRow, productName: string, branchName: string) => {
-    // Always resolve the latest row (including stock id) from state.
-    const resolved = findStock(entry.branchId, entry.productId) ?? entry;
+  const openEdit = (row: StockRow, productName: string, branchName: string) => {
     setEditForm({
-      quantity: String(resolved.physical),
-      restockQuantity: String(resolved.restockQuantity),
-      restockDate: resolved.restockDate
-        ? resolved.restockDate.slice(0, 10)
-        : "",
+      quantity: String(row.physical),
+      restockQuantity: String(row.restockQuantity),
+      restockDate: row.restockDate ? row.restockDate.slice(0, 10) : "",
     });
     setSaveError("");
-    setEditModal({ row: resolved, productName, branchName });
+    setEditModal({ row, productName, branchName });
+  };
+
+  const openCreate = (
+    branchId: string,
+    productId: string,
+    productName: string,
+    branchName: string
+  ) => {
+    setCreateForm({ quantity: "", restockQuantity: "0", restockDate: "" });
+    setSaveError("");
+    setCreateModal({ branchId, productId, productName, branchName });
+  };
+
+  const upsertLocalRow = (row: StockRow) => {
+    setStock((prev) => {
+      const idx = prev.findIndex((s) => s.id === row.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = row;
+        return next;
+      }
+      const byKey = prev.findIndex(
+        (s) => s.branchId === row.branchId && s.productId === row.productId
+      );
+      if (byKey >= 0) {
+        const next = [...prev];
+        next[byKey] = row;
+        return next;
+      }
+      return [...prev, row];
+    });
+    void loadAvailability([row]);
   };
 
   const handleSaveEdit = async () => {
@@ -218,65 +231,61 @@ export const AdminStock: React.FC = () => {
         setSaveError("Physical stock must be a valid number.");
         return;
       }
-      const payload = {
+      const updated = await updateBranchStock(editModal.row.id, {
         quantity,
         restock_quantity: Number.isFinite(restockQuantity) ? restockQuantity : 0,
         restock_date: editForm.restockDate.trim() || null,
-      };
-
-      // Prefer ID from modal; fall back to current stock list so we never
-      // accidentally POST a duplicate for an existing branch+product row.
-      const existingId =
-        editModal.row.id ??
-        findStock(editModal.row.branchId, editModal.row.productId)?.id ??
-        null;
-
-      let row: StockRow;
-      if (existingId != null) {
-        const updated = await updateBranchStock(existingId, payload);
-        row = {
-          id: updated.id,
-          branchId: String(updated.branch_id),
-          productId: String(updated.product_id),
-          physical: updated.quantity,
-          restockQuantity: updated.restock_quantity,
-          restockDate: updated.restock_date,
-          available: null,
-        };
-      } else {
-        const created = await createBranchStock({
-          branch_id: Number(editModal.row.branchId),
-          product_id: Number(editModal.row.productId),
-          quantity: payload.quantity,
-          restock_quantity: payload.restock_quantity,
-          restock_date: payload.restock_date,
-        });
-        row = {
-          id: created.id,
-          branchId: String(created.branch_id),
-          productId: String(created.product_id),
-          physical: created.quantity,
-          restockQuantity: created.restock_quantity,
-          restockDate: created.restock_date,
-          available: null,
-        };
-      }
-      setStock((prev) => {
-        const idx = prev.findIndex(
-          (s) => s.branchId === row.branchId && s.productId === row.productId
-        );
-        if (idx >= 0) {
-          const next = [...prev];
-          next[idx] = row;
-          return next;
-        }
-        return [...prev, row];
       });
-      void loadAvailability([row]);
+      upsertLocalRow({
+        id: updated.id,
+        branchId: String(updated.branch_id),
+        productId: String(updated.product_id),
+        physical: updated.quantity,
+        restockQuantity: updated.restock_quantity,
+        restockDate: updated.restock_date,
+        available: null,
+      });
       setEditModal(null);
     } catch (err) {
       setSaveError(
         err instanceof ApiError ? err.message : "Failed to update stock."
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCreateForCell = async () => {
+    if (!createModal) return;
+    setSaving(true);
+    setSaveError("");
+    try {
+      const quantity = Number(createForm.quantity);
+      const restockQuantity = Number(createForm.restockQuantity);
+      if (!Number.isFinite(quantity) || quantity < 0) {
+        setSaveError("Physical stock must be a valid number.");
+        return;
+      }
+      const created = await createBranchStock({
+        branch_id: Number(createModal.branchId),
+        product_id: Number(createModal.productId),
+        quantity,
+        restock_quantity: Number.isFinite(restockQuantity) ? restockQuantity : 0,
+        restock_date: createForm.restockDate.trim() || null,
+      });
+      upsertLocalRow({
+        id: created.id,
+        branchId: String(created.branch_id),
+        productId: String(created.product_id),
+        physical: created.quantity,
+        restockQuantity: created.restock_quantity,
+        restockDate: created.restock_date,
+        available: null,
+      });
+      setCreateModal(null);
+    } catch (err) {
+      setSaveError(
+        err instanceof ApiError ? err.message : "Failed to create stock."
       );
     } finally {
       setSaving(false);
@@ -305,11 +314,9 @@ export const AdminStock: React.FC = () => {
       };
 
       const existing = findStock(branchId, productId);
-      let row: StockRow;
-      if (existing?.id != null) {
-        // Existing combination → update, never duplicate-create.
+      if (existing) {
         const updated = await updateBranchStock(existing.id, payload);
-        row = {
+        upsertLocalRow({
           id: updated.id,
           branchId: String(updated.branch_id),
           productId: String(updated.product_id),
@@ -317,7 +324,7 @@ export const AdminStock: React.FC = () => {
           restockQuantity: updated.restock_quantity,
           restockDate: updated.restock_date,
           available: null,
-        };
+        });
       } else {
         const created = await createBranchStock({
           branch_id: Number(branchId),
@@ -326,7 +333,7 @@ export const AdminStock: React.FC = () => {
           restock_quantity: payload.restock_quantity,
           restock_date: payload.restock_date,
         });
-        row = {
+        upsertLocalRow({
           id: created.id,
           branchId: String(created.branch_id),
           productId: String(created.product_id),
@@ -334,20 +341,8 @@ export const AdminStock: React.FC = () => {
           restockQuantity: created.restock_quantity,
           restockDate: created.restock_date,
           available: null,
-        };
+        });
       }
-      setStock((prev) => {
-        const idx = prev.findIndex(
-          (s) => s.branchId === row.branchId && s.productId === row.productId
-        );
-        if (idx >= 0) {
-          const next = [...prev];
-          next[idx] = row;
-          return next;
-        }
-        return [...prev, row];
-      });
-      void loadAvailability([row]);
       setAddModal(false);
       setForm({
         branchId: "",
@@ -366,8 +361,7 @@ export const AdminStock: React.FC = () => {
   };
 
   const handleDelete = async (row: StockRow) => {
-    if (row.id == null) return;
-    if (!confirm("Delete this stock record?")) return;
+    if (!confirm("Delete this stock record from the database?")) return;
     try {
       await deleteBranchStock(row.id);
       setStock((prev) => prev.filter((s) => s.id !== row.id));
@@ -375,13 +369,6 @@ export const AdminStock: React.FC = () => {
       /* ignore */
     }
   };
-
-  const availableColor = (avail: number) =>
-    avail === 0
-      ? "text-[#EF4444] bg-[#FEF2F2] border-[#FECACA]"
-      : avail < 10
-        ? "text-[#92400E] bg-[#FFFBEB] border-[#FDE68A]"
-        : "text-[#065F46] bg-[#ECFDF5] border-[#A7F3D0]";
 
   if (loading) return <LoadingState message="Loading stock…" />;
   if (loadError && stock.length === 0 && branches.length === 0) {
@@ -393,9 +380,11 @@ export const AdminStock: React.FC = () => {
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="font-display text-3xl font-bold text-[#0F172A]">Stock Management</h1>
-          <p className="text-[#64748B] mt-1">Physical stock, reservations, and available inventory per branch.</p>
+          <p className="text-[#64748B] mt-1">
+            Database records only. Missing combinations show &quot;No stock record&quot; — not fake zeros.
+          </p>
         </div>
-        <Button icon={<IconPlus size={16} />} onClick={() => setAddModal(true)}>
+        <Button icon={<IconPlus size={16} />} onClick={() => { setSaveError(""); setAddModal(true); }}>
           Add Stock
         </Button>
       </div>
@@ -403,9 +392,10 @@ export const AdminStock: React.FC = () => {
       <Card className="p-4">
         <div className="flex flex-wrap gap-4 text-xs">
           {[
-            ["Physical Stock", "Total units in warehouse", "#4F46E5"],
-            ["Reserved", "Physical − available (when loaded)", "#F59E0B"],
-            ["Available", "From reservations API", "#10B981"],
+            ["Physical Stock", "branch_stock.quantity in database", "#4F46E5"],
+            ["Reserved", "Active TEMPORARY holds (physical − available)", "#F59E0B"],
+            ["Available", "physical − active temporary reservations", "#10B981"],
+            ["No stock record", "No branch_stock row for this pair", "#94A3B8"],
           ].map(([label, desc, color]) => (
             <div key={label} className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
@@ -431,14 +421,12 @@ export const AdminStock: React.FC = () => {
 
       {filteredBranches.map((branch) => (
         <Card key={branch.id} className="overflow-hidden">
-          <div className="px-5 py-4 bg-[#F8FAFC] border-b border-[#E2E8F0] flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 bg-[#EEF2FF] rounded-lg flex items-center justify-center">
-                <IconInventory size={14} className="text-[#4F46E5]" />
-              </div>
-              <h2 className="font-display font-bold text-[#0F172A]">{branch.name}</h2>
-              <span className="text-xs text-[#94A3B8]">— {branch.city}</span>
+          <div className="px-5 py-4 bg-[#F8FAFC] border-b border-[#E2E8F0] flex items-center gap-2">
+            <div className="w-7 h-7 bg-[#EEF2FF] rounded-lg flex items-center justify-center">
+              <IconInventory size={14} className="text-[#4F46E5]" />
             </div>
+            <h2 className="font-display font-bold text-[#0F172A]">{branch.name}</h2>
+            <span className="text-xs text-[#94A3B8]">— {branch.city}</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -451,15 +439,47 @@ export const AdminStock: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-[#F8FAFC]">
                 {filteredProducts.map((product) => {
-                  const entry = getStock(branch.id, product.id);
-                  const avail = availableDisplay(entry);
+                  const entry = findStock(branch.id, product.id);
+                  if (!entry) {
+                    return (
+                      <tr key={product.id} className="hover:bg-[#F8FAFC] transition-colors">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2.5">
+                            <img src={product.image} alt={product.name} className="w-9 h-9 rounded-xl object-cover bg-[#F1F5F9] shrink-0" />
+                            <p className="font-medium text-[#0F172A] leading-tight">{product.name}</p>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3" colSpan={5}>
+                          <span className="inline-flex items-center text-xs font-medium text-[#64748B] bg-[#F1F5F9] border border-[#E2E8F0] px-2.5 py-1 rounded-lg">
+                            No stock record
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              openCreate(branch.id, product.id, product.name, branch.name)
+                            }
+                          >
+                            Create
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  const avail = entry.available;
                   const reserved = reservedDisplay(entry);
                   return (
                     <tr key={product.id} className="hover:bg-[#F8FAFC] transition-colors">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2.5">
                           <img src={product.image} alt={product.name} className="w-9 h-9 rounded-xl object-cover bg-[#F1F5F9] shrink-0" />
-                          <p className="font-medium text-[#0F172A] leading-tight">{product.name}</p>
+                          <div>
+                            <p className="font-medium text-[#0F172A] leading-tight">{product.name}</p>
+                            <p className="text-[10px] text-[#94A3B8] font-mono-data">stock_id={entry.id}</p>
+                          </div>
                         </div>
                       </td>
                       <td className="px-4 py-3">
@@ -481,15 +501,13 @@ export const AdminStock: React.FC = () => {
                           <span className="text-[#94A3B8]">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 whitespace-nowrap">
                         <button onClick={() => openEdit(entry, product.name, branch.name)} className="p-2 rounded-lg hover:bg-[#EEF2FF] text-[#94A3B8] hover:text-[#4F46E5] transition-colors">
                           <IconEdit size={15} />
                         </button>
-                        {entry.id != null && (
-                          <button onClick={() => void handleDelete(entry)} className="p-2 rounded-lg hover:bg-[#FEF2F2] text-[#94A3B8] hover:text-[#EF4444] text-xs ml-1">
-                            Del
-                          </button>
-                        )}
+                        <button onClick={() => void handleDelete(entry)} className="p-2 rounded-lg hover:bg-[#FEF2F2] text-[#94A3B8] hover:text-[#EF4444] text-xs ml-1">
+                          Del
+                        </button>
                       </td>
                     </tr>
                   );
@@ -509,6 +527,8 @@ export const AdminStock: React.FC = () => {
               <p className="font-medium text-[#0F172A] text-sm">{editModal.branchName}</p>
               <p className="text-xs text-[#94A3B8] mt-2">Product</p>
               <p className="font-medium text-[#0F172A] text-sm">{editModal.productName}</p>
+              <p className="text-xs text-[#94A3B8] mt-2">Database stock_id</p>
+              <p className="font-mono-data text-sm text-[#0F172A]">{editModal.row.id}</p>
             </div>
             <Input label="Physical Stock (units)" type="number" min="0" value={editForm.quantity} onChange={(e) => setEditForm({ ...editForm, quantity: e.target.value })} />
             <Input label="Restock quantity" type="number" min="0" value={editForm.restockQuantity} onChange={(e) => setEditForm({ ...editForm, restockQuantity: e.target.value })} />
@@ -516,6 +536,30 @@ export const AdminStock: React.FC = () => {
             <div className="flex gap-3">
               <Button loading={saving} onClick={() => void handleSaveEdit()} className="flex-1">Update Stock</Button>
               <Button variant="outline" onClick={() => setEditModal(null)} className="flex-1">Cancel</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal open={createModal !== null} onClose={() => setCreateModal(null)} title="Create Stock Record" size="sm">
+        {createModal && (
+          <div className="space-y-4">
+            {saveError && <p className="text-sm text-[#EF4444]">{saveError}</p>}
+            <div className="bg-[#F8FAFC] rounded-xl p-4 border border-[#E2E8F0]">
+              <p className="text-xs text-[#94A3B8]">Branch</p>
+              <p className="font-medium text-[#0F172A] text-sm">{createModal.branchName}</p>
+              <p className="text-xs text-[#94A3B8] mt-2">Product</p>
+              <p className="font-medium text-[#0F172A] text-sm">{createModal.productName}</p>
+              <p className="text-xs text-[#64748B] mt-3">
+                This will create a real <code className="font-mono-data">branch_stock</code> row.
+              </p>
+            </div>
+            <Input label="Physical quantity" type="number" min="0" value={createForm.quantity} onChange={(e) => setCreateForm({ ...createForm, quantity: e.target.value })} />
+            <Input label="Restock quantity" type="number" min="0" value={createForm.restockQuantity} onChange={(e) => setCreateForm({ ...createForm, restockQuantity: e.target.value })} />
+            <Input label="Restock date" type="date" value={createForm.restockDate} onChange={(e) => setCreateForm({ ...createForm, restockDate: e.target.value })} />
+            <div className="flex gap-3">
+              <Button loading={saving} onClick={() => void handleCreateForCell()} className="flex-1">Create Record</Button>
+              <Button variant="outline" onClick={() => setCreateModal(null)} className="flex-1">Cancel</Button>
             </div>
           </div>
         )}
