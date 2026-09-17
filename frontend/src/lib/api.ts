@@ -388,6 +388,20 @@ export function createCheckoutHold(payload: {
   );
 }
 
+export interface ApiNoteClassification {
+  category: string;
+  confidence: number;
+  low_confidence: boolean;
+}
+
+export function classifyCheckoutNote(message: string) {
+  return apiFetch<ApiNoteClassification>(
+    "/checkout/classify",
+    { method: "POST", body: JSON.stringify({ message }) },
+    false
+  );
+}
+
 export function confirmCheckoutHold(holdId: number) {
   return apiFetch<ApiOrder>(
     "/checkout/confirm",

@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { Product, CartItem, Page } from "@/lib/types";
 import { fetchProducts, searchProducts, ApiError } from "@/lib/api";
 import { mapApiProduct } from "@/lib/mappers";
+import { formatCurrency } from "@/lib/currency";
 import {
   Button,
   Card,
@@ -199,7 +200,7 @@ export const Products: React.FC<Props> = ({ cart, onAddToCart, navigate }) => {
                   </h3>
                   <p className="text-xs text-[#64748B] leading-relaxed mb-4 line-clamp-2 flex-1">{product.description}</p>
                   <div className="flex items-center justify-between mb-3">
-                    <span className="font-display font-bold text-xl text-[#0F172A]">${product.price.toFixed(2)}</span>
+                    <span className="font-display font-bold text-xl text-[#0F172A]">{formatCurrency(product.price)}</span>
                     <QuantitySelector
                       value={getQty(product.id)}
                       onChange={(v) => setQuantities((prev) => ({ ...prev, [product.id]: v }))}

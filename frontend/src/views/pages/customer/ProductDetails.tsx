@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import type { CartItem, Page, Product } from "@/lib/types";
 import { fetchProduct, fetchProducts, ApiError } from "@/lib/api";
 import { mapApiProduct } from "@/lib/mappers";
+import { formatCurrency } from "@/lib/currency";
 import {
   Button,
   Badge,
@@ -147,7 +148,7 @@ export const ProductDetails: React.FC<Props> = ({
             <span className="text-sm text-[#64748B] ml-1">4.8 (128 reviews)</span>
           </div>
 
-          <p className="font-display text-4xl font-bold text-[#0F172A] mb-6">${product.price.toFixed(2)}</p>
+          <p className="font-display text-4xl font-bold text-[#0F172A] mb-6">{formatCurrency(product.price)}</p>
 
           <p className="text-[#475569] leading-relaxed mb-8">{product.description}</p>
 
@@ -203,7 +204,7 @@ export const ProductDetails: React.FC<Props> = ({
                 <img src={p.image} alt={p.name} className="w-16 h-16 rounded-xl object-cover bg-[#F1F5F9] shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="font-display font-bold text-[#0F172A] text-sm leading-tight truncate">{p.name}</p>
-                  <p className="font-bold text-[#4F46E5] mt-1 text-sm">${p.price.toFixed(2)}</p>
+                  <p className="font-bold text-[#4F46E5] mt-1 text-sm">{formatCurrency(p.price)}</p>
                 </div>
               </Card>
             ))}

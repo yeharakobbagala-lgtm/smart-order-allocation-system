@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import type { Page } from "@/lib/types";
 import type { ApiCheckoutHold } from "@/lib/api";
+import { formatCurrency } from "@/lib/currency";
 import {
   Button,
   Card,
@@ -215,7 +216,7 @@ export const Reservation: React.FC<Props> = ({
                   {item.product_name} × {item.quantity}
                 </span>
                 <span className="font-medium text-[#0F172A] shrink-0">
-                  ${Number(item.line_total).toFixed(2)}
+                  {formatCurrency(Number(item.line_total))}
                 </span>
               </div>
             ))}
@@ -223,16 +224,16 @@ export const Reservation: React.FC<Props> = ({
           <div className="mt-4 space-y-1.5 text-sm border-t border-[#E2E8F0] pt-3">
             <div className="flex justify-between">
               <span className="text-[#64748B]">Subtotal</span>
-              <span className="font-medium">${subtotal.toFixed(2)}</span>
+              <span className="font-medium">{formatCurrency(subtotal)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-[#64748B]">Delivery</span>
-              <span className="font-medium">${delivery.toFixed(2)}</span>
+              <span className="font-medium">{formatCurrency(delivery)}</span>
             </div>
             <div className="flex justify-between text-base pt-1">
               <span className="font-display font-bold text-[#0F172A]">Total</span>
               <span className="font-display font-bold text-[#0F172A]">
-                ${total.toFixed(2)}
+                {formatCurrency(total)}
               </span>
             </div>
           </div>

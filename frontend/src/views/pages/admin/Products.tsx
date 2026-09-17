@@ -9,6 +9,7 @@ import {
   ApiError,
 } from "@/lib/api";
 import { mapApiProduct } from "@/lib/mappers";
+import { formatCurrency } from "@/lib/currency";
 import {
   Button,
   Card,
@@ -182,7 +183,7 @@ export const AdminProducts: React.FC = () => {
                     </div>
                   </td>
                   <td className="px-4 py-3"><Badge variant="muted">{p.category}</Badge></td>
-                  <td className="px-4 py-3 font-bold text-[#0F172A]">${p.price.toFixed(2)}</td>
+                  <td className="px-4 py-3 font-bold text-[#0F172A]">{formatCurrency(p.price)}</td>
                   <td className="px-4 py-3">
                     <button onClick={() => void toggleActive(p)} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${p.active ? "bg-[#10B981]" : "bg-[#CBD5E1]"}`}>
                       <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${p.active ? "translate-x-4" : "translate-x-1"}`} />
@@ -206,7 +207,7 @@ export const AdminProducts: React.FC = () => {
           {errors.form && <p className="text-sm text-[#EF4444]">{errors.form}</p>}
           <Input label="Product Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} error={errors.name} placeholder="Sony WH-1000XM5 Headphones" />
           <Textarea label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} error={errors.description} placeholder="Product description..." rows={3} />
-          <Input label="Price (USD)" type="number" min="0" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} error={errors.price} placeholder="49.99" />
+          <Input label="Price (LKR)" type="number" min="0" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} error={errors.price} placeholder="35000.00" />
           <Input label="Image URL (optional)" value={form.image} onChange={(e) => setForm({ ...form, image: e.target.value })} placeholder="https://..." hint="Leave blank for default image" />
           <div className="flex items-center gap-3">
             <button onClick={() => setForm({ ...form, active: !form.active })} className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors ${form.active ? "bg-[#10B981]" : "bg-[#CBD5E1]"}`}>

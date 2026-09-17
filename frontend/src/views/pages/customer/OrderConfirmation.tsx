@@ -2,6 +2,7 @@
 
 import React from "react";
 import type { Order, Page } from "@/lib/types";
+import { formatCurrency } from "@/lib/currency";
 import { Button, Card, StatusBadge, IconCheck, IconChevronRight } from "@/components/ui";
 
 interface Props {
@@ -60,7 +61,7 @@ export const OrderConfirmation: React.FC<Props> = ({ order, navigate }) => {
             {order.items.map((item) => (
               <div key={item.productId} className="flex justify-between text-sm">
                 <span className="text-[#64748B]">{item.productName} ×{item.quantity}</span>
-                <span className="font-medium text-[#0F172A]">${(item.price * item.quantity).toFixed(2)}</span>
+                <span className="font-medium text-[#0F172A]">{formatCurrency(item.price * item.quantity)}</span>
               </div>
             ))}
           </div>
@@ -68,7 +69,7 @@ export const OrderConfirmation: React.FC<Props> = ({ order, navigate }) => {
 
         <div className="flex justify-between font-display font-bold text-xl text-[#0F172A] border-t border-[#E2E8F0] pt-4">
           <span>Total</span>
-          <span>${order.total.toFixed(2)}</span>
+          <span>{formatCurrency(order.total)}</span>
         </div>
       </Card>
 

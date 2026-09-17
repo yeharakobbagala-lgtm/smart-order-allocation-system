@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import type { Branch, Order, Page } from "@/lib/types";
+import { formatCurrency } from "@/lib/currency";
 import { Card, StatusBadge, EmptyState, IconSearch, IconPackage, IconEye } from "@/components/ui";
 
 interface Props {
@@ -102,7 +103,7 @@ export const AdminOrders: React.FC<Props> = ({ orders, branches, navigate }) => 
                       {order.items.length}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <span className="font-bold text-[#0F172A]">${order.total.toFixed(2)}</span>
+                      <span className="font-bold text-[#0F172A]">{formatCurrency(order.total)}</span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap"><StatusBadge status={order.status} /></td>
                     <td className="px-4 py-3 whitespace-nowrap"><StatusBadge status={order.paymentStatus} /></td>

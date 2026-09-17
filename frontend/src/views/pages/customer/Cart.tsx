@@ -2,6 +2,7 @@
 
 import React from "react";
 import type { CartItem, Page } from "@/lib/types";
+import { formatCurrency } from "@/lib/currency";
 import {
   Button,
   Card,
@@ -111,8 +112,8 @@ export const Cart: React.FC<Props> = ({
                       </button>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs text-[#94A3B8]">${item.product.price.toFixed(2)} each</p>
-                      <p className="font-display font-bold text-[#0F172A]">${(item.product.price * item.quantity).toFixed(2)}</p>
+                      <p className="text-xs text-[#94A3B8]">{formatCurrency(item.product.price)} each</p>
+                      <p className="font-display font-bold text-[#0F172A]">{formatCurrency(item.product.price * item.quantity)}</p>
                     </div>
                   </div>
                 </div>
@@ -128,14 +129,14 @@ export const Cart: React.FC<Props> = ({
               {cart.map((item) => (
                 <div key={item.cartItemId} className="flex items-start justify-between text-sm gap-2">
                   <span className="text-[#64748B] leading-tight">{item.product.name} <span className="text-[#94A3B8]">×{item.quantity}</span></span>
-                  <span className="font-medium text-[#0F172A] shrink-0">${(item.product.price * item.quantity).toFixed(2)}</span>
+                  <span className="font-medium text-[#0F172A] shrink-0">{formatCurrency(item.product.price * item.quantity)}</span>
                 </div>
               ))}
             </div>
             <div className="border-t border-[#E2E8F0] pt-4 mb-5">
               <div className="flex justify-between text-sm mb-2">
                 <span className="text-[#64748B]">Subtotal</span>
-                <span className="font-medium">${total.toFixed(2)}</span>
+                <span className="font-medium">{formatCurrency(total)}</span>
               </div>
               <div className="flex justify-between text-sm mb-3">
                 <span className="text-[#64748B]">Delivery</span>
@@ -143,7 +144,7 @@ export const Cart: React.FC<Props> = ({
               </div>
               <div className="flex justify-between font-display font-bold text-lg text-[#0F172A]">
                 <span>Total</span>
-                <span>${total.toFixed(2)}</span>
+                <span>{formatCurrency(total)}</span>
               </div>
             </div>
             <Button size="lg" className="w-full" onClick={() => navigate("checkout")} iconRight={<IconChevronRight size={16} />}>

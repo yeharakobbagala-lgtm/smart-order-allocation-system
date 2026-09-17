@@ -12,6 +12,7 @@ import {
   ApiError,
 } from "@/lib/api";
 import { mapApiProduct } from "@/lib/mappers";
+import { formatCurrency } from "@/lib/currency";
 import { enrichApiOrders } from "@/lib/order-enrichment";
 import {
   Card,
@@ -195,7 +196,7 @@ export const AdminDashboard: React.FC<Props> = ({ navigate }) => {
                     <p className="text-xs text-[#94A3B8]">{order.branchName}</p>
                   </div>
                   <StatusBadge status={order.status} />
-                  <span className="font-bold text-[#0F172A] text-sm shrink-0">${order.total.toFixed(2)}</span>
+                  <span className="font-bold text-[#0F172A] text-sm shrink-0">{formatCurrency(order.total)}</span>
                 </div>
               ))}
             </div>

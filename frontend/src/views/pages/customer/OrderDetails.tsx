@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import type { Order, Page } from "@/lib/types";
+import { formatCurrency } from "@/lib/currency";
 import { Button, Card, StatusBadge, OrderTimeline, Modal, Alert, IconArrowLeft, IconMapPin, IconCalendar, IconBranch } from "@/components/ui";
 
 interface Props {
@@ -115,15 +116,15 @@ export const OrderDetails: React.FC<Props> = ({ order, navigate, onCancelOrder }
               <img src={item.image} alt={item.productName} className="w-14 h-14 rounded-xl object-cover bg-[#F1F5F9] shrink-0" />
               <div className="flex-1">
                 <p className="font-medium text-[#0F172A] text-sm">{item.productName}</p>
-                <p className="text-xs text-[#94A3B8]">${item.price.toFixed(2)} × {item.quantity}</p>
+                <p className="text-xs text-[#94A3B8]">{formatCurrency(item.price)} × {item.quantity}</p>
               </div>
-              <p className="font-display font-bold text-[#0F172A]">${(item.price * item.quantity).toFixed(2)}</p>
+              <p className="font-display font-bold text-[#0F172A]">{formatCurrency(item.price * item.quantity)}</p>
             </div>
           ))}
         </div>
         <div className="px-5 py-4 bg-[#F8FAFC] border-t border-[#E2E8F0] flex justify-between font-display font-bold text-xl text-[#0F172A]">
           <span>Total</span>
-          <span>${order.total.toFixed(2)}</span>
+          <span>{formatCurrency(order.total)}</span>
         </div>
       </Card>
 

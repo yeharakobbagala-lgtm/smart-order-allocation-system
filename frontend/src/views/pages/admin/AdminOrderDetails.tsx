@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import type { Order, OrderStatus, Page } from "@/lib/types";
+import { formatCurrency } from "@/lib/currency";
 import { Button, Card, StatusBadge, Badge, ScoreBar, Alert, Select, IconArrowLeft, IconMapPin, IconBranch } from "@/components/ui";
 
 interface Props {
@@ -147,16 +148,16 @@ export const AdminOrderDetails: React.FC<Props> = ({ order, navigate, onStatusCh
                   <img src={item.image} alt={item.productName} className="w-12 h-12 rounded-xl object-cover bg-[#F1F5F9] shrink-0" />
                   <div className="flex-1">
                     <p className="text-sm font-medium text-[#0F172A]">{item.productName}</p>
-                    <p className="text-xs text-[#94A3B8]">Unit price: ${item.price.toFixed(2)}</p>
+                    <p className="text-xs text-[#94A3B8]">Unit price: {formatCurrency(item.price)}</p>
                   </div>
                   <p className="text-xs text-[#64748B]">×{item.quantity}</p>
-                  <p className="font-bold text-[#0F172A]">${(item.price * item.quantity).toFixed(2)}</p>
+                  <p className="font-bold text-[#0F172A]">{formatCurrency(item.price * item.quantity)}</p>
                 </div>
               ))}
             </div>
             <div className="px-5 py-3 bg-[#F8FAFC] border-t border-[#E2E8F0] flex justify-between font-display font-bold text-[#0F172A]">
               <span>Total</span>
-              <span>${order.total.toFixed(2)}</span>
+              <span>{formatCurrency(order.total)}</span>
             </div>
           </Card>
         </div>
@@ -269,7 +270,7 @@ export const AdminOrderDetails: React.FC<Props> = ({ order, navigate, onStatusCh
               <div className="flex justify-between items-center"><span className="text-[#64748B]">Status</span><StatusBadge status={order.paymentStatus} /></div>
               <div className="flex justify-between border-t border-[#E2E8F0] pt-2 mt-2">
                 <span className="font-bold text-[#0F172A]">Total</span>
-                <span className="font-display font-bold text-[#0F172A]">${order.total.toFixed(2)}</span>
+                <span className="font-display font-bold text-[#0F172A]">{formatCurrency(order.total)}</span>
               </div>
             </div>
           </Card>

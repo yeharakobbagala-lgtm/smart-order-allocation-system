@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import type { Order, Page } from "@/lib/types";
+import { formatCurrency } from "@/lib/currency";
 import { Card, StatusBadge, EmptyState, IconPackage, IconChevronRight } from "@/components/ui";
 
 interface Props {
@@ -95,7 +96,7 @@ export const MyOrders: React.FC<Props> = ({ orders, navigate }) => {
                   </div>
                 </div>
                 <div className="text-right flex flex-col items-end gap-1">
-                  <p className="font-display font-bold text-xl text-[#0F172A]">${order.total.toFixed(2)}</p>
+                  <p className="font-display font-bold text-xl text-[#0F172A]">{formatCurrency(order.total)}</p>
                   <p className="text-xs text-[#94A3B8]">{new Date(order.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
                   <p className="text-xs text-[#64748B]">{order.branchName}</p>
                   <IconChevronRight size={16} className="text-[#94A3B8]" />
