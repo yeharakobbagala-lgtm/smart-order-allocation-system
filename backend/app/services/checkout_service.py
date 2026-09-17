@@ -335,7 +335,7 @@ def _validate_hold_reservations(
         db.query(Cart)
         .options(joinedload(Cart.items))
         .filter(Cart.id == hold.cart_id)
-        .with_for_update()
+        .with_for_update(of=Cart)
         .first()
     )
 
@@ -400,7 +400,7 @@ def confirm_checkout_hold(
             db.query(Cart)
             .options(joinedload(Cart.items).joinedload(CartItem.product))
             .filter(Cart.id == hold.cart_id, Cart.user_id == user_id)
-            .with_for_update()
+            .with_for_update(of=Cart)
             .first()
         )
 
