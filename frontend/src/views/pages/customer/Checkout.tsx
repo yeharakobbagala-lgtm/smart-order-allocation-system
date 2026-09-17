@@ -3,11 +3,6 @@
 import React, { useState } from "react";
 import type { CartItem, Page } from "@/lib/types";
 import { formatCurrency } from "@/lib/currency";
-import {
-  ApiError,
-  classifyCheckoutNote,
-  type ApiNoteClassification,
-} from "@/lib/api";
 import { BranchLocationPicker } from "@/components/BranchLocationPicker";
 import {
   Button,
@@ -60,10 +55,6 @@ export const Checkout: React.FC<Props> = ({
   const [longitude, setLongitude] = useState<number | null>(null);
   const [errors, setErrors] = useState<Partial<DeliveryForm & { location: string }>>({});
   const [submitError, setSubmitError] = useState("");
-  const [classifying, setClassifying] = useState(false);
-  const [classification, setClassification] =
-    useState<ApiNoteClassification | null>(null);
-  const [classifyError, setClassifyError] = useState("");
 
   const total = cart.reduce((sum, i) => sum + i.product.price * i.quantity, 0);
 
@@ -97,33 +88,6 @@ export const Checkout: React.FC<Props> = ({
       const message =
         err instanceof Error ? err.message : "Could not place order.";
       setSubmitError(message);
-    }
-  };
-
-  const handleClassifyNote = async () => {
-    const message = form.note.trim();
-    if (!message) {
-      setClassification(null);
-      setClassifyError("Enter an order note to classify.");
-      return;
-    }
-
-    setClassifying(true);
-    setClassifyError("");
-    setClassification(null);
-    try {
-      const result = await classifyCheckoutNote(message);
-      setClassification(result);
-    } catch (err) {
-      const message =
-        err instanceof ApiError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : "Could not classify note.";
-      setClassifyError(message);
-    } finally {
-      setClassifying(false);
     }
   };
 
@@ -204,59 +168,7 @@ export const Checkout: React.FC<Props> = ({
                 )}
               </div>
               <div className="sm:col-span-2">
-                <Textarea
-                  label="Order note (optional)"
-                  value={form.note}
-                  onChange={(e) => {
-                    field("note", e.target.value);
-                    setClassification(null);
-                    setClassifyError("");
-                  }}
-                  placeholder="E.g. Leave at the door, ring buzzer 4B..."
-                />
-                <div className="mt-3 flex flex-col sm:flex-row sm:items-start gap-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    loading={classifying}
-                    disabled={submitting || classifying}
-                    onClick={() => void handleClassifyNote()}
-                    className="w-full sm:w-auto shrink-0"
-                  >
-                    {classifying ? "Classifying..." : "Classify Note"}
-                  </Button>
-                  <div className="flex-1 min-w-0">
-                    {classifyError && (
-                      <p className="text-xs text-[#EF4444]">{classifyError}</p>
-                    )}
-                    {classification && !classifyError && (
-                      <div className="rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5 text-sm space-y-1">
-                        <p className="text-[#0F172A]">
-                          <span className="text-[#64748B]">Category:</span>{" "}
-                          <span className="font-medium">{classification.category}</span>
-                        </p>
-                        <p className="text-[#0F172A]">
-                          <span className="text-[#64748B]">Confidence:</span>{" "}
-                          <span className="font-medium">
-                            {Math.round(classification.confidence * 100)}%
-                          </span>
-                        </p>
-                        <p
-                          className={
-                            classification.low_confidence
-                              ? "text-xs text-[#92400E]"
-                              : "text-xs text-[#065F46]"
-                          }
-                        >
-                          {classification.low_confidence
-                            ? "Low confidence — manual review recommended"
-                            : "High confidence"}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <Textarea label="Order note (optional)" value={form.note} onChange={(e) => field("note", e.target.value)} placeholder="E.g. Leave at the door, ring buzzer 4B..." />
               </div>
             </div>
           </Card>

@@ -2,12 +2,14 @@
 
 import React, { useEffect, useState } from "react";
 import type { Page } from "@/lib/types";
-import type { ApiCheckoutHold } from "@/lib/api";
+import type { ApiCheckoutHold, ApiNoteClassification } from "@/lib/api";
+import { ApiError, classifyCheckoutNote } from "@/lib/api";
 import { formatCurrency } from "@/lib/currency";
 import {
   Button,
   Card,
   Alert,
+  Textarea,
   CountdownTimer,
   IconArrowLeft,
 } from "@/components/ui";
@@ -43,6 +45,11 @@ export const Reservation: React.FC<Props> = ({
   const [expired, setExpired] = useState(
     () => secondsUntilExpiry(hold.expires_at) <= 0
   );
+  const [assistantMessage, setAssistantMessage] = useState("");
+  const [analysing, setAnalysing] = useState(false);
+  const [classification, setClassification] =
+    useState<ApiNoteClassification | null>(null);
+  const [assistantError, setAssistantError] = useState("");
 
   useEffect(() => {
     const left = secondsUntilExpiry(hold.expires_at);
@@ -67,6 +74,33 @@ export const Reservation: React.FC<Props> = ({
   const subtotal = Number(hold.subtotal);
   const delivery = Number(hold.delivery);
   const total = Number(hold.total);
+
+  const handleAnalyse = async () => {
+    const message = assistantMessage.trim();
+    if (!message) {
+      setClassification(null);
+      setAssistantError("Please enter a question.");
+      return;
+    }
+
+    setAnalysing(true);
+    setAssistantError("");
+    setClassification(null);
+    try {
+      const result = await classifyCheckoutNote(message);
+      setClassification(result);
+    } catch (err) {
+      const detail =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Could not analyse your question.";
+      setAssistantError(detail);
+    } finally {
+      setAnalysing(false);
+    }
+  };
 
   if (expired) {
     return (
@@ -244,6 +278,72 @@ export const Reservation: React.FC<Props> = ({
               </span>
             </div>
           </div>
+        </div>
+
+        <hr className="border-[#E2E8F0] my-6" />
+
+        <div className="space-y-3">
+          <div>
+            <p className="text-sm font-semibold text-[#0F172A]">
+              💬 Ask about your order
+            </p>
+            <p className="text-xs text-[#64748B] mt-1">
+              Have a question? We can classify your inquiry. This does not
+              affect your reservation or confirmation.
+            </p>
+          </div>
+          <Textarea
+            label="Your question"
+            value={assistantMessage}
+            onChange={(e) => {
+              setAssistantMessage(e.target.value);
+              setAssistantError("");
+              setClassification(null);
+            }}
+            placeholder="Type your question here..."
+            rows={3}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            loading={analysing}
+            disabled={analysing || confirming}
+            onClick={() => void handleAnalyse()}
+            className="w-full sm:w-auto"
+          >
+            {analysing ? "Analysing..." : "Analyse"}
+          </Button>
+          {assistantError && (
+            <p className="text-xs text-[#EF4444]">{assistantError}</p>
+          )}
+          {classification && !assistantError && (
+            <div className="rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-3 text-sm space-y-1.5">
+              <p className="text-[#0F172A]">
+                <span className="text-[#64748B]">Category</span>
+                <br />
+                <span className="font-medium">{classification.category}</span>
+              </p>
+              <p className="text-[#0F172A]">
+                <span className="text-[#64748B]">Confidence</span>
+                <br />
+                <span className="font-medium">
+                  {Math.round(classification.confidence * 100)}%
+                </span>
+              </p>
+              <p
+                className={
+                  classification.low_confidence
+                    ? "text-xs text-[#92400E]"
+                    : "text-xs text-[#065F46]"
+                }
+              >
+                {classification.low_confidence
+                  ? "⚠ Low confidence — manual review recommended"
+                  : "✓ High confidence"}
+              </p>
+            </div>
+          )}
         </div>
 
         {confirmError && (
