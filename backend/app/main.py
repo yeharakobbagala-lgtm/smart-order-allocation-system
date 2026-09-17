@@ -101,6 +101,13 @@ def health_db():
         "settings_nonempty": settings_nonempty,
         "repo_root_is_filesystem_root": repo_resolved.parent == repo_resolved,
         "backend_root_name": BACKEND_ROOT.name,
+        # Names only — helps detect mistyped Railway variable keys.
+        "related_env_key_names": sorted(
+            key
+            for key in os.environ
+            if key.upper().startswith(("DB_", "MYSQL", "JWT", "CORS"))
+            or key.upper() in {"PORT", "RAILWAY_ENVIRONMENT", "RAILWAY_SERVICE_NAME"}
+        ),
     }
 
     try:
