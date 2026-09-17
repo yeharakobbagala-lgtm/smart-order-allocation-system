@@ -54,7 +54,9 @@ export const AdminUsers: React.FC<{ currentUser: User }> = ({ currentUser }) => 
     setLoading(true);
     setLoadError("");
     if (!getApiBaseUrl()) {
-      setLoadError("Set NEXT_PUBLIC_API_URL to load users from the API.");
+      setLoadError(
+        "Set NEXT_PUBLIC_API_URL (Vercel env for production, or frontend/.env.local locally) to load users from the API."
+      );
       setUsers([]);
       setLoading(false);
       return;

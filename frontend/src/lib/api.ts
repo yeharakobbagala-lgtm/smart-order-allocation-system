@@ -68,7 +68,7 @@ export async function apiFetch<T>(
   const base = getApiBaseUrl();
   if (!base) {
     throw new ApiError(
-      "API URL is not configured. Set NEXT_PUBLIC_API_URL in frontend/.env.local.",
+      "API URL is not configured. Set NEXT_PUBLIC_API_URL in the Vercel project environment (Production) and redeploy, or in frontend/.env.local for local development.",
       0
     );
   }
@@ -90,18 +90,48 @@ export async function apiFetch<T>(
     res = await fetch(`${base}${path}`, { ...options, headers });
   } catch {
     throw new ApiError(
-      "Cannot reach the API. Check that the backend is running and NEXT_PUBLIC_API_URL is correct.",
+      "Cannot reach the API. Check that the backend is running, NEXT_PUBLIC_API_URL is correct, and Railway CORS_ORIGINS includes this site's origin.",
       0
     );
   }
 
   if (!res.ok) {
-    let message = `Request failed (${res.status})`;
+    let detail = "";
     try {
-      message = parseDetail(await res.json());
+      detail = parseDetail(await res.json());
     } catch {
       /* ignore */
     }
+
+    const friendlyByStatus: Record<number, string> = {
+      401: "Your session has expired. Please sign in again.",
+      403: "You do not have permission to perform this action.",
+      404: "The requested resource was not found.",
+      409:
+        "Sorry, this order can no longer be fulfilled with the current stock or branch availability.",
+      422: detail || "Please check your input and try again.",
+      500: "Something went wrong on the server. Please try again later.",
+    };
+
+    let message =
+      friendlyByStatus[res.status] ||
+      detail ||
+      `Request failed (${res.status})`;
+
+    // Prefer specific validation / business messages when they are clear
+    if (
+      detail &&
+      (res.status === 400 ||
+        res.status === 422 ||
+        (res.status >= 400 &&
+          res.status < 500 &&
+          res.status !== 401 &&
+          res.status !== 403 &&
+          res.status !== 409))
+    ) {
+      message = detail;
+    }
+
     if (res.status === 401) {
       setAccessToken(null);
       setStoredUser(null);
