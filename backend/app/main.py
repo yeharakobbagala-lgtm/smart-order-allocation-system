@@ -1,7 +1,12 @@
+import os
+import re
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from app.config.settings import settings
+from app.database.connection import engine
 from app.routers import (
     product_router,
     auth_router,
@@ -45,8 +50,49 @@ app.include_router(stock_reservation_router)
 app.include_router(order_router)
 
 
+def _redact_db_error(message: str) -> str:
+    message = re.sub(
+        r"(password|passwd|pwd)\s*[:=]\s*\S+",
+        r"\1=***",
+        message,
+        flags=re.IGNORECASE,
+    )
+    message = re.sub(r"@[^/\s:]+", "@***", message)
+    message = re.sub(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", "***", message)
+    return message[:500]
+
+
 @app.get("/")
 def root():
     return {
         "message": "Smart Order Allocation System API is running"
     }
+
+
+@app.get("/health/db")
+def health_db():
+    """Temporary diagnostic for Railway DB connectivity (no secrets)."""
+    env_present = {
+        "DB_HOST": bool(settings.DB_HOST),
+        "DB_PORT": bool(os.getenv("DB_PORT")),
+        "DB_NAME": bool(settings.DB_NAME),
+        "DB_USER": bool(settings.DB_USER),
+        "DB_PASSWORD": bool(settings.DB_PASSWORD),
+        "MYSQLHOST": bool(os.getenv("MYSQLHOST")),
+        "MYSQLPORT": bool(os.getenv("MYSQLPORT")),
+        "MYSQLDATABASE": bool(os.getenv("MYSQLDATABASE")),
+        "MYSQLUSER": bool(os.getenv("MYSQLUSER")),
+        "MYSQLPASSWORD": bool(os.getenv("MYSQLPASSWORD")),
+    }
+
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        return {"ok": True, "env_present": env_present}
+    except Exception as exc:
+        return {
+            "ok": False,
+            "error_type": type(exc).__name__,
+            "error": _redact_db_error(str(exc)),
+            "env_present": env_present,
+        }
