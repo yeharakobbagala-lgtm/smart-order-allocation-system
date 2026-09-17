@@ -75,13 +75,18 @@ def calculate_order_stock_wait(stock_wait_times: list[float | None]) -> float | 
 
     return max(stock_wait_times)
 
-def calculate_processing_time() -> timedelta:
+def calculate_processing_time(distance_km: float) -> timedelta:
     """
-    Return the standard processing time required
-    to pick, pack, and prepare an order.
+    Return processing time to pick, pack, and prepare an order.
+
+    Road distance <= 40 km → 1 day
+    Road distance > 40 km  → 2 days
     """
 
-    return timedelta(days=1)
+    if distance_km <= 40:
+        return timedelta(days=1)
+
+    return timedelta(days=2)
 
 def calculate_distance_km(
     latitude1: float,
@@ -175,17 +180,18 @@ def calculate_road_travel_time(
 def calculate_expected_eta(
     stock_wait_hours: float,
     travel_time_hours: float,
+    distance_km: float,
 ) -> float:
     """
     Calculate the expected fulfillment ETA in hours.
 
     Expected ETA consists of:
     - Stock waiting time
-    - Fixed processing time
+    - Distance-based processing time
     - Road travel time
     """
 
-    processing_time = calculate_processing_time()
+    processing_time = calculate_processing_time(distance_km)
 
     processing_hours = processing_time.total_seconds() / 3600
 

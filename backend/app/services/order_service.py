@@ -67,9 +67,12 @@ def create_order(
 
     branch_id = selected_branch["branch_id"]
 
-    # Snapshot processing time using the same constant as allocate_order / ETA
+    # Snapshot processing time using the same rule as allocate_order / ETA
     processing_time_hours = (
-        calculate_processing_time().total_seconds() / 3600
+        calculate_processing_time(
+            selected_branch["distance_km"]
+        ).total_seconds()
+        / 3600
     )
 
     # 3. Calculate total

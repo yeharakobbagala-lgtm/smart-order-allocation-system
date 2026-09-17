@@ -10,8 +10,13 @@ def test_temporary_reservation_is_ten_minutes():
     assert TEMPORARY_RESERVATION_MINUTES == 10
 
 
-def test_processing_time_is_one_day():
-    assert calculate_processing_time() == timedelta(days=1)
+def test_processing_time_by_road_distance():
+    assert calculate_processing_time(40) == timedelta(days=1)
+    assert calculate_processing_time(30) == timedelta(days=1)
+    assert calculate_processing_time(40.1) == timedelta(days=2)
+    assert calculate_processing_time(100) == timedelta(days=2)
+    assert calculate_processing_time(40).total_seconds() / 3600 == 24
+    assert calculate_processing_time(40.1).total_seconds() / 3600 == 48
 
 
 def test_eta_to_delivery_window():
@@ -26,6 +31,6 @@ def test_eta_to_delivery_window():
 
 if __name__ == "__main__":
     test_temporary_reservation_is_ten_minutes()
-    test_processing_time_is_one_day()
+    test_processing_time_by_road_distance()
     test_eta_to_delivery_window()
     print("checkout smoke tests ok")

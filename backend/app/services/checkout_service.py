@@ -168,7 +168,10 @@ def create_checkout_hold(
 
     branch_id = selected_branch["branch_id"]
     processing_time_hours = (
-        calculate_processing_time().total_seconds() / 3600
+        calculate_processing_time(
+            selected_branch["distance_km"]
+        ).total_seconds()
+        / 3600
     )
 
     subtotal = Decimal("0.00")

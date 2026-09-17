@@ -174,6 +174,7 @@ def calculate_branch_candidate(
     eta_hours = calculate_expected_eta(
         stock_wait_hours,
         travel_time_hours,
+        distance_km,
     )
 
     return {
