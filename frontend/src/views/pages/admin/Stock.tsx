@@ -82,7 +82,24 @@ export const AdminStock: React.FC = () => {
         }
       })
     );
-    setStock(updated);
+    // Merge into existing state — never replace the full list with a partial
+    // subset (that drops stock IDs and causes edit to POST instead of PUT).
+    setStock((prev) => {
+      const byKey = new Map(
+        updated.map((r) => [`${r.branchId}:${r.productId}`, r] as const)
+      );
+      const merged = prev.map((r) => {
+        const key = `${r.branchId}:${r.productId}`;
+        return byKey.get(key) ?? r;
+      });
+      for (const r of updated) {
+        const key = `${r.branchId}:${r.productId}`;
+        if (!prev.some((p) => `${p.branchId}:${p.productId}` === key)) {
+          merged.push(r);
+        }
+      }
+      return merged;
+    });
   }, []);
 
   const load = useCallback(async () => {
@@ -149,11 +166,12 @@ export const AdminStock: React.FC = () => {
     [products, search]
   );
 
+  const findStock = (branchId: string, productId: string) =>
+    stock.find((s) => s.branchId === branchId && s.productId === productId);
+
   const getStock = (branchId: string, productId: string): StockRow => {
     return (
-      stock.find(
-        (s) => s.branchId === branchId && s.productId === productId
-      ) ?? {
+      findStock(branchId, productId) ?? {
         id: null,
         branchId,
         productId,
@@ -176,13 +194,17 @@ export const AdminStock: React.FC = () => {
   };
 
   const openEdit = (entry: StockRow, productName: string, branchName: string) => {
+    // Always resolve the latest row (including stock id) from state.
+    const resolved = findStock(entry.branchId, entry.productId) ?? entry;
     setEditForm({
-      quantity: String(entry.physical),
-      restockQuantity: String(entry.restockQuantity),
-      restockDate: entry.restockDate || "",
+      quantity: String(resolved.physical),
+      restockQuantity: String(resolved.restockQuantity),
+      restockDate: resolved.restockDate
+        ? resolved.restockDate.slice(0, 10)
+        : "",
     });
     setSaveError("");
-    setEditModal({ row: entry, productName, branchName });
+    setEditModal({ row: resolved, productName, branchName });
   };
 
   const handleSaveEdit = async () => {
@@ -201,11 +223,21 @@ export const AdminStock: React.FC = () => {
         restock_quantity: Number.isFinite(restockQuantity) ? restockQuantity : 0,
         restock_date: editForm.restockDate.trim() || null,
       };
-      let row = editModal.row;
-      if (row.id != null) {
-        const updated = await updateBranchStock(row.id, payload);
+
+      // Prefer ID from modal; fall back to current stock list so we never
+      // accidentally POST a duplicate for an existing branch+product row.
+      const existingId =
+        editModal.row.id ??
+        findStock(editModal.row.branchId, editModal.row.productId)?.id ??
+        null;
+
+      let row: StockRow;
+      if (existingId != null) {
+        const updated = await updateBranchStock(existingId, payload);
         row = {
-          ...row,
+          id: updated.id,
+          branchId: String(updated.branch_id),
+          productId: String(updated.product_id),
           physical: updated.quantity,
           restockQuantity: updated.restock_quantity,
           restockDate: updated.restock_date,
@@ -213,8 +245,8 @@ export const AdminStock: React.FC = () => {
         };
       } else {
         const created = await createBranchStock({
-          branch_id: Number(row.branchId),
-          product_id: Number(row.productId),
+          branch_id: Number(editModal.row.branchId),
+          product_id: Number(editModal.row.productId),
           quantity: payload.quantity,
           restock_quantity: payload.restock_quantity,
           restock_date: payload.restock_date,
@@ -255,23 +287,66 @@ export const AdminStock: React.FC = () => {
     setSaving(true);
     setSaveError("");
     try {
-      const created = await createBranchStock({
-        branch_id: Number(form.branchId),
-        product_id: Number(form.productId),
-        quantity: Number(form.quantity),
+      const branchId = form.branchId;
+      const productId = form.productId;
+      if (!branchId || !productId) {
+        setSaveError("Select a branch and product.");
+        return;
+      }
+      const quantity = Number(form.quantity);
+      if (!Number.isFinite(quantity) || quantity < 0) {
+        setSaveError("Physical stock must be a valid number.");
+        return;
+      }
+      const payload = {
+        quantity,
         restock_quantity: Number(form.restockQuantity) || 0,
         restock_date: form.restockDate.trim() || null,
-      });
-      const row: StockRow = {
-        id: created.id,
-        branchId: String(created.branch_id),
-        productId: String(created.product_id),
-        physical: created.quantity,
-        restockQuantity: created.restock_quantity,
-        restockDate: created.restock_date,
-        available: null,
       };
-      setStock((prev) => [...prev, row]);
+
+      const existing = findStock(branchId, productId);
+      let row: StockRow;
+      if (existing?.id != null) {
+        // Existing combination → update, never duplicate-create.
+        const updated = await updateBranchStock(existing.id, payload);
+        row = {
+          id: updated.id,
+          branchId: String(updated.branch_id),
+          productId: String(updated.product_id),
+          physical: updated.quantity,
+          restockQuantity: updated.restock_quantity,
+          restockDate: updated.restock_date,
+          available: null,
+        };
+      } else {
+        const created = await createBranchStock({
+          branch_id: Number(branchId),
+          product_id: Number(productId),
+          quantity: payload.quantity,
+          restock_quantity: payload.restock_quantity,
+          restock_date: payload.restock_date,
+        });
+        row = {
+          id: created.id,
+          branchId: String(created.branch_id),
+          productId: String(created.product_id),
+          physical: created.quantity,
+          restockQuantity: created.restock_quantity,
+          restockDate: created.restock_date,
+          available: null,
+        };
+      }
+      setStock((prev) => {
+        const idx = prev.findIndex(
+          (s) => s.branchId === row.branchId && s.productId === row.productId
+        );
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = row;
+          return next;
+        }
+        return [...prev, row];
+      });
       void loadAvailability([row]);
       setAddModal(false);
       setForm({

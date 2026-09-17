@@ -107,29 +107,19 @@ export async function apiFetch<T>(
       401: "Your session has expired. Please sign in again.",
       403: "You do not have permission to perform this action.",
       404: "The requested resource was not found.",
-      409:
-        "Sorry, this order can no longer be fulfilled with the current stock or branch availability.",
       422: detail || "Please check your input and try again.",
       500: "Something went wrong on the server. Please try again later.",
     };
 
+    // Prefer backend detail for business conflicts (stock duplicate, order allocation, etc.)
     let message =
-      friendlyByStatus[res.status] ||
       detail ||
+      friendlyByStatus[res.status] ||
       `Request failed (${res.status})`;
 
-    // Prefer specific validation / business messages when they are clear
-    if (
-      detail &&
-      (res.status === 400 ||
-        res.status === 422 ||
-        (res.status >= 400 &&
-          res.status < 500 &&
-          res.status !== 401 &&
-          res.status !== 403 &&
-          res.status !== 409))
-    ) {
-      message = detail;
+    if (res.status === 409 && !detail) {
+      message =
+        "Sorry, this order can no longer be fulfilled with the current stock or branch availability.";
     }
 
     if (res.status === 401) {
