@@ -24,6 +24,7 @@ from app.utils.allocation import (
     calculate_processing_time,
     calculate_stock_wait,
 )
+from app.utils.datetime_utc import utc_now_naive
 
 
 def _get_user_cart(db: Session, user_id: int) -> Cart:
@@ -64,7 +65,7 @@ def _cancel_active_temporary_for_cart(
 
 
 def _expire_active_holds_for_user(db: Session, user_id: int) -> None:
-    now = datetime.utcnow()
+    now = utc_now_naive()
     holds = (
         db.query(CheckoutHold)
         .filter(
@@ -177,7 +178,7 @@ def create_checkout_hold(
     delivery_fee = Decimal("0.00")
     total_amount = subtotal + delivery_fee
 
-    now = datetime.utcnow()
+    now = utc_now_naive()
     eta_hours = float(selected_branch["eta_hours"])
     estimated_delivery_date = now + timedelta(hours=eta_hours)
     # Narrow window derived from ETA only (10% of ETA, minimum 1 hour)
@@ -275,7 +276,7 @@ def _validate_hold_reservations(
     db: Session,
     hold: CheckoutHold,
 ) -> list[StockReservation]:
-    now = datetime.utcnow()
+    now = utc_now_naive()
 
     if hold.status != "ACTIVE":
         raise HTTPException(

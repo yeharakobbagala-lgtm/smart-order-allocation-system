@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -9,6 +9,7 @@ from app.repositories.stock_reservation_repository import (
     get_active_current_reserved_quantity,
     get_active_future_committed_quantity,
 )
+from app.utils.datetime_utc import utc_now_naive
 
 
 # =========================================================
@@ -103,7 +104,7 @@ def create_temporary_reservation(
             detail="Reservation quantity must be greater than zero.",
         )
 
-    now = datetime.utcnow()
+    now = utc_now_naive()
 
     reservation = StockReservation(
         user_id=user_id,
@@ -173,7 +174,7 @@ def convert_reservation_to_order(
 
     if reservation.expires_at is not None:
 
-        if reservation.expires_at <= datetime.utcnow():
+        if reservation.expires_at <= utc_now_naive():
 
             reservation.status = "EXPIRED"
 

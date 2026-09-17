@@ -14,7 +14,6 @@ import { pageToHref } from "@/lib/navigation";
 import {
   addCartItem,
   cancelOrder as apiCancelOrder,
-  createOrder,
   fetchCart,
   fetchCurrentUser,
   fetchMyOrder,
@@ -29,7 +28,6 @@ import {
 } from "@/lib/api";
 import { mapApiCart, mapApiUser } from "@/lib/mappers";
 import { enrichApiOrders } from "@/lib/order-enrichment";
-import type { DeliveryForm } from "@/views/pages/customer/Checkout";
 import { ToastContainer, useToast } from "@/components/ui";
 
 interface AppContextValue {
@@ -46,7 +44,6 @@ interface AppContextValue {
   addToCart: (product: Product, qty: number) => Promise<void>;
   updateQty: (cartItemId: string, qty: number) => Promise<void>;
   removeFromCart: (cartItemId: string) => Promise<void>;
-  placeOrder: (form: DeliveryForm) => Promise<Order>;
   cancelCustomerOrder: (orderId: string) => Promise<void>;
   loadOrder: (orderId: string) => Promise<Order | null>;
   setConfirmedOrder: (order: Order | null) => void;
@@ -222,42 +219,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [addToast, refreshCart]
   );
 
-  const placeOrder = useCallback(
-    async (form: DeliveryForm) => {
-      const lat = Number(form.lat);
-      const lng = Number(form.lng);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-        throw new Error("Please select a delivery location on the map.");
-      }
-
-      const deliveryAddress = [form.address.trim(), form.city.trim()]
-        .filter(Boolean)
-        .join(", ");
-
-      const created = await createOrder({
-        customer_name: form.name.trim(),
-        phone: form.phone.trim(),
-        delivery_address: deliveryAddress,
-        latitude: lat,
-        longitude: lng,
-        order_note: form.note.trim() || null,
-        payment_method: "COD",
-      });
-
-      const mapped = (
-        await enrichApiOrders([created], { customerEmail: user?.email })
-      )[0];
-
-      setConfirmedOrder(mapped);
-      setCart([]);
-      await refreshOrders();
-      addToast("Order placed successfully!", "success");
-      router.push(`/orders/${mapped.id}/confirmation`);
-      return mapped;
-    },
-    [addToast, refreshOrders, router, user?.email]
-  );
-
   const cancelCustomerOrder = useCallback(
     async (orderId: string) => {
       const updated = await apiCancelOrder(Number(orderId));
@@ -314,7 +275,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addToCart,
       updateQty,
       removeFromCart,
-      placeOrder,
       cancelCustomerOrder,
       loadOrder,
       setConfirmedOrder,
@@ -337,7 +297,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addToCart,
       updateQty,
       removeFromCart,
-      placeOrder,
       cancelCustomerOrder,
       loadOrder,
       customerOrders,

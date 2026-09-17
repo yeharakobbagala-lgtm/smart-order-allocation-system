@@ -1,9 +1,8 @@
-from datetime import datetime
-
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.stock_reservation import StockReservation
+from app.utils.datetime_utc import utc_now_naive
 
 
 def get_active_current_reserved_quantity(
@@ -20,7 +19,7 @@ def get_active_current_reserved_quantity(
     CURRENT reservations never expire.
     """
 
-    now = datetime.utcnow()
+    now = utc_now_naive()
 
     result = (
         db.query(

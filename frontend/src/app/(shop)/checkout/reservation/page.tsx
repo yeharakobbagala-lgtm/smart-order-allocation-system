@@ -12,6 +12,7 @@ import {
 } from "@/lib/checkout-hold";
 import { enrichApiOrders } from "@/lib/order-enrichment";
 import type { ApiCheckoutHold } from "@/lib/api";
+import { secondsUntilExpiry } from "@/lib/datetime";
 
 export default function ReservationPage() {
   const router = useRouter();
@@ -47,6 +48,16 @@ export default function ReservationPage() {
 
   const onConfirmOrder = useCallback(async () => {
     if (!hold) return;
+
+    if (secondsUntilExpiry(hold.expires_at) <= 0) {
+      setConfirmError("Reservation has expired.");
+      clearCheckoutHold();
+      setHold((prev) =>
+        prev ? { ...prev, status: "EXPIRED" } : prev
+      );
+      return;
+    }
+
     setConfirming(true);
     setConfirmError("");
     try {
@@ -62,21 +73,31 @@ export default function ReservationPage() {
       router.push(`/orders/${mapped.id}/confirmation`);
     } catch (err) {
       const message =
-        err instanceof ApiError && err.status === 409
-          ? err.message ||
-            "Reservation has expired or is no longer valid. Return to checkout to allocate again."
+        err instanceof ApiError
+          ? err.message
           : err instanceof Error
             ? err.message
             : "Could not confirm order.";
       setConfirmError(message);
       addToast(message, "error");
-      if (err instanceof ApiError && err.status === 409) {
+
+      const expired =
+        err instanceof ApiError &&
+        err.status === 409 &&
+        /expir/i.test(message);
+
+      if (expired) {
+        clearCheckoutHold();
         setHold((prev) =>
           prev
-            ? { ...prev, expires_at: new Date(0).toISOString(), status: "EXPIRED" }
+            ? {
+                ...prev,
+                // Keep a past UTC timestamp so the UI switches to expired state
+                expires_at: new Date(Date.now() - 1000).toISOString(),
+                status: "EXPIRED",
+              }
             : prev
         );
-        clearCheckoutHold();
       }
     } finally {
       setConfirming(false);

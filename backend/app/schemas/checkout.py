@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 
 class CheckoutHoldCreate(BaseModel):
@@ -47,3 +47,14 @@ class CheckoutHoldResponse(BaseModel):
     status: str
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_serializer(
+        "estimated_delivery_date",
+        "estimated_delivery_end",
+        "expires_at",
+    )
+    def serialize_utc_datetimes(self, value: datetime) -> str:
+        """Always emit UTC with Z so clients never treat naive times as local."""
+        from app.utils.datetime_utc import to_utc_iso_z
+
+        return to_utc_iso_z(value) or ""

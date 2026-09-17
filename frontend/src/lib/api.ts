@@ -332,6 +332,8 @@ export function createOrder(payload: {
   order_note?: string | null;
   payment_method?: string;
 }) {
+  // Legacy direct order create. Customer checkout MUST use
+  // createCheckoutHold + confirmCheckoutHold instead.
   return apiFetch<ApiOrder>(
     "/orders/",
     { method: "POST", body: JSON.stringify(payload) },

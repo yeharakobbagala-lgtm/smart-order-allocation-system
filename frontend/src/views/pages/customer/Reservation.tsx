@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import type { Page } from "@/lib/types";
 import type { ApiCheckoutHold } from "@/lib/api";
 import {
@@ -11,6 +11,16 @@ import {
   IconCheck,
   IconArrowLeft,
 } from "@/components/ui";
+import {
+  RESERVATION_DURATION_SECONDS,
+  formatDeliveryDate,
+  formatEtaHours,
+  formatExpiryClock,
+  formatProcessingTime,
+  formatStockWait,
+  formatTravelTime,
+  secondsUntilExpiry,
+} from "@/lib/datetime";
 
 interface Props {
   hold: ApiCheckoutHold;
@@ -20,30 +30,6 @@ interface Props {
   navigate: (page: Page) => void;
 }
 
-function formatHours(value: number): string {
-  if (value < 1) return `${Math.round(value * 60)} min`;
-  if (value < 48) return `${value.toFixed(1)} h`;
-  return `${(value / 24).toFixed(1)} days`;
-}
-
-function formatDateTime(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-function secondsUntil(iso: string): number {
-  const end = new Date(iso).getTime();
-  if (Number.isNaN(end)) return 0;
-  return Math.max(0, Math.floor((end - Date.now()) / 1000));
-}
-
 export const Reservation: React.FC<Props> = ({
   hold,
   confirming,
@@ -51,34 +37,31 @@ export const Reservation: React.FC<Props> = ({
   onConfirmOrder,
   navigate,
 }) => {
-  const totalSeconds = useMemo(
-    () => Math.max(1, secondsUntil(hold.expires_at) || 600),
-    [hold.expires_at]
-  );
   const [secondsLeft, setSecondsLeft] = useState(() =>
-    secondsUntil(hold.expires_at)
+    secondsUntilExpiry(hold.expires_at)
   );
-  const [expired, setExpired] = useState(() => secondsUntil(hold.expires_at) <= 0);
+  const [expired, setExpired] = useState(
+    () => secondsUntilExpiry(hold.expires_at) <= 0
+  );
 
   useEffect(() => {
-    setSecondsLeft(secondsUntil(hold.expires_at));
-    setExpired(secondsUntil(hold.expires_at) <= 0);
+    const left = secondsUntilExpiry(hold.expires_at);
+    setSecondsLeft(left);
+    setExpired(left <= 0);
   }, [hold.expires_at]);
 
   useEffect(() => {
     if (expired) return;
 
     const tick = () => {
-      const left = secondsUntil(hold.expires_at);
+      const left = secondsUntilExpiry(hold.expires_at);
       setSecondsLeft(left);
-      if (left <= 0) {
-        setExpired(true);
-      }
+      if (left <= 0) setExpired(true);
     };
 
     tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
   }, [hold.expires_at, expired]);
 
   const subtotal = Number(hold.subtotal);
@@ -87,7 +70,7 @@ export const Reservation: React.FC<Props> = ({
 
   if (expired) {
     return (
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-16">
+      <div className="max-w-xl mx-auto px-4 sm:px-6 py-16">
         <Card className="p-8 text-center space-y-4">
           <Alert variant="danger" title="Reservation expired">
             Your 10-minute stock reservation has ended. No order was created.
@@ -107,110 +90,148 @@ export const Reservation: React.FC<Props> = ({
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+    <div className="max-w-xl mx-auto px-4 sm:px-6 py-8 space-y-4">
       <button
+        type="button"
         onClick={() => navigate("checkout")}
         className="flex items-center gap-2 text-sm text-[#64748B] hover:text-[#334155] font-medium"
       >
         <IconArrowLeft size={16} /> Back to Checkout
       </button>
 
-      <Card className="p-8">
-        <div className="text-center mb-6">
-          <div className="inline-flex items-center gap-2 bg-[#ECFDF5] text-[#065F46] px-4 py-1.5 rounded-full text-sm font-medium mb-4">
+      <Card className="p-6 sm:p-8">
+        <h1 className="font-display text-2xl font-bold text-[#0F172A] text-center mb-5">
+          Order Reservation
+        </h1>
+
+        <div className="flex justify-center mb-6">
+          <div className="inline-flex items-center gap-2 bg-[#ECFDF5] text-[#065F46] px-4 py-1.5 rounded-full text-sm font-medium">
             <IconCheck size={14} />
             Stock temporarily reserved
           </div>
-          <h1 className="font-display text-2xl font-bold text-[#0F172A] mb-2">
-            Review your allocation
-          </h1>
-          <p className="text-[#64748B] text-sm max-w-md mx-auto">
-            Stock is temporarily reserved for 10 minutes. Confirm your order
-            before the reservation expires.
+        </div>
+
+        <div className="space-y-5 text-sm">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#94A3B8]">
+              Allocated Branch
+            </p>
+            <p className="font-display text-lg font-bold text-[#0F172A] mt-1">
+              {hold.branch_name}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#94A3B8]">
+              Delivery Estimate
+            </p>
+            <p className="font-display font-bold text-[#0F172A] mt-1">
+              {formatDeliveryDate(hold.estimated_delivery_date)}
+            </p>
+            <p className="text-[#64748B] mt-0.5">
+              Estimated arrival: {formatEtaHours(hold.eta_hours)}
+            </p>
+            {hold.estimated_delivery_end &&
+              hold.estimated_delivery_end !== hold.estimated_delivery_date && (
+                <p className="text-xs text-[#94A3B8] mt-1">
+                  Window ends {formatDeliveryDate(hold.estimated_delivery_end)}
+                </p>
+              )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#94A3B8]">
+                Road Distance
+              </p>
+              <p className="font-medium text-[#0F172A] mt-1">
+                {Number(hold.distance_km).toFixed(1)} km
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#94A3B8]">
+                Travel Time
+              </p>
+              <p className="font-medium text-[#0F172A] mt-1">
+                {formatTravelTime(hold.travel_time_hours)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#94A3B8]">
+                Stock Wait
+              </p>
+              <p className="font-medium text-[#0F172A] mt-1">
+                {formatStockWait(hold.stock_wait_hours)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#94A3B8]">
+                Processing Time
+              </p>
+              <p className="font-medium text-[#0F172A] mt-1">
+                {formatProcessingTime(hold.processing_time_hours)}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <hr className="border-[#E2E8F0] my-6" />
+
+        <div className="text-center mb-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#94A3B8] mb-3">
+            Reservation
+          </p>
+          <p className="text-sm text-[#64748B] mb-3">⏳ Reserved for you</p>
+          <div className="flex justify-center mb-3">
+            <CountdownTimer
+              seconds={secondsLeft}
+              total={RESERVATION_DURATION_SECONDS}
+            />
+          </div>
+          <p className="text-sm text-[#334155]">
+            Reservation expires at:{" "}
+            <span className="font-mono-data font-semibold">
+              {formatExpiryClock(hold.expires_at)}
+            </span>
+          </p>
+          <p className="text-xs text-[#94A3B8] mt-2">
+            Your stock is held for 10 minutes.
           </p>
         </div>
 
-        <div className="flex justify-center mb-2">
-          <CountdownTimer seconds={secondsLeft} total={totalSeconds} />
-        </div>
-        <p className="text-center text-xs text-[#94A3B8] mb-6">
-          Expires at {formatDateTime(hold.expires_at)}
-        </p>
+        <hr className="border-[#E2E8F0] my-6" />
 
-        <div className="grid sm:grid-cols-2 gap-4 mb-6">
-          <div className="bg-[#F8FAFC] rounded-2xl p-4 border border-[#E2E8F0]">
-            <p className="text-xs text-[#64748B] mb-1">Selected branch</p>
-            <p className="font-display font-bold text-[#0F172A]">{hold.branch_name}</p>
-          </div>
-          <div className="bg-[#F8FAFC] rounded-2xl p-4 border border-[#E2E8F0]">
-            <p className="text-xs text-[#64748B] mb-1">Road distance</p>
-            <p className="font-display font-bold text-[#0F172A]">
-              {hold.distance_km.toFixed(1)} km
-            </p>
-          </div>
-          <div className="bg-[#F8FAFC] rounded-2xl p-4 border border-[#E2E8F0]">
-            <p className="text-xs text-[#64748B] mb-1">Expected ETA</p>
-            <p className="font-display font-bold text-[#0F172A]">
-              {formatHours(hold.eta_hours)}
-            </p>
-          </div>
-          <div className="bg-[#F8FAFC] rounded-2xl p-4 border border-[#E2E8F0]">
-            <p className="text-xs text-[#64748B] mb-1">Estimated delivery</p>
-            <p className="font-display font-bold text-[#0F172A] text-sm">
-              {formatDateTime(hold.estimated_delivery_date)}
-              {hold.estimated_delivery_end &&
-                hold.estimated_delivery_end !== hold.estimated_delivery_date && (
-                  <>
-                    {" "}
-                    – {formatDateTime(hold.estimated_delivery_end)}
-                  </>
-                )}
-            </p>
-          </div>
-        </div>
-
-        <div className="border border-[#E2E8F0] rounded-2xl overflow-hidden mb-6">
-          <div className="bg-[#F8FAFC] px-4 py-2.5 border-b border-[#E2E8F0]">
-            <p className="text-xs font-semibold text-[#64748B] uppercase tracking-wider">
-              Order summary
-            </p>
-          </div>
-          <div className="divide-y divide-[#F1F5F9]">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#94A3B8] mb-3">
+            Order Summary
+          </p>
+          <div className="space-y-2">
             {hold.items.map((item) => (
               <div
                 key={item.reservation_id}
-                className="flex items-center gap-3 px-4 py-3"
+                className="flex justify-between gap-3 text-sm"
               >
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-[#0F172A] truncate">
-                    {item.product_name}
-                  </p>
-                  <p className="text-xs text-[#94A3B8]">
-                    Qty: {item.quantity} × ${Number(item.unit_price).toFixed(2)}
-                  </p>
-                </div>
-                <p className="text-sm font-bold text-[#0F172A]">
+                <span className="text-[#0F172A]">
+                  {item.product_name} × {item.quantity}
+                </span>
+                <span className="font-medium text-[#0F172A] shrink-0">
                   ${Number(item.line_total).toFixed(2)}
-                </p>
+                </span>
               </div>
             ))}
           </div>
-          <div className="px-4 py-3 bg-[#F8FAFC] border-t border-[#E2E8F0] space-y-1">
-            <div className="flex justify-between text-sm">
+          <div className="mt-4 space-y-1.5 text-sm border-t border-[#E2E8F0] pt-3">
+            <div className="flex justify-between">
               <span className="text-[#64748B]">Subtotal</span>
-              <span className="font-medium text-[#0F172A]">
-                ${subtotal.toFixed(2)}
-              </span>
+              <span className="font-medium">${subtotal.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between text-sm">
+            <div className="flex justify-between">
               <span className="text-[#64748B]">Delivery</span>
-              <span className="font-medium text-[#0F172A]">
-                ${delivery.toFixed(2)}
-              </span>
+              <span className="font-medium">${delivery.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between pt-1">
+            <div className="flex justify-between text-base pt-1">
               <span className="font-display font-bold text-[#0F172A]">Total</span>
-              <span className="font-display font-bold text-[#4F46E5] text-lg">
+              <span className="font-display font-bold text-[#0F172A]">
                 ${total.toFixed(2)}
               </span>
             </div>
@@ -218,14 +239,14 @@ export const Reservation: React.FC<Props> = ({
         </div>
 
         {confirmError && (
-          <Alert variant="danger" className="mb-4">
+          <Alert variant="danger" className="mt-5">
             {confirmError}
           </Alert>
         )}
 
         <Button
           size="lg"
-          className="w-full"
+          className="w-full mt-6 uppercase tracking-wide"
           loading={confirming}
           disabled={expired || confirming}
           onClick={onConfirmOrder}
@@ -233,11 +254,6 @@ export const Reservation: React.FC<Props> = ({
           Confirm Order
         </Button>
       </Card>
-
-      <Alert variant="info">
-        Your items are held for 10 minutes using a temporary stock reservation.
-        If time runs out, return to checkout to allocate again.
-      </Alert>
     </div>
   );
 };
