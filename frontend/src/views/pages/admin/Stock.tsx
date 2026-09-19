@@ -34,6 +34,10 @@ interface StockRow {
   restockQuantity: number;
   restockDate: string | null;
   available: number | null;
+  /** ACTIVE FUTURE reservation units committed against restock */
+  futureCommitted: number | null;
+  /** restock_quantity − ACTIVE FUTURE committed */
+  remainingRestock: number | null;
 }
 
 export const AdminStock: React.FC = () => {
@@ -86,9 +90,19 @@ export const AdminStock: React.FC = () => {
             Number(row.productId),
             row.physical
           );
-          return { ...row, available: avail.available_quantity };
+          return {
+            ...row,
+            available: avail.available_quantity,
+            futureCommitted: avail.future_committed_quantity,
+            remainingRestock: avail.remaining_restock_quantity,
+          };
         } catch {
-          return { ...row, available: null };
+          return {
+            ...row,
+            available: null,
+            futureCommitted: null,
+            remainingRestock: null,
+          };
         }
       })
     );
@@ -132,6 +146,8 @@ export const AdminStock: React.FC = () => {
         restockQuantity: s.restock_quantity,
         restockDate: s.restock_date,
         available: null,
+        futureCommitted: null,
+        remainingRestock: null,
       }));
       setStock(rows);
       void loadAvailability(rows);
@@ -244,6 +260,8 @@ export const AdminStock: React.FC = () => {
         restockQuantity: updated.restock_quantity,
         restockDate: updated.restock_date,
         available: null,
+        futureCommitted: null,
+        remainingRestock: null,
       });
       setEditModal(null);
     } catch (err) {
@@ -281,6 +299,8 @@ export const AdminStock: React.FC = () => {
         restockQuantity: created.restock_quantity,
         restockDate: created.restock_date,
         available: null,
+        futureCommitted: null,
+        remainingRestock: null,
       });
       setCreateModal(null);
     } catch (err) {
@@ -324,6 +344,8 @@ export const AdminStock: React.FC = () => {
           restockQuantity: updated.restock_quantity,
           restockDate: updated.restock_date,
           available: null,
+          futureCommitted: null,
+          remainingRestock: null,
         });
       } else {
         const created = await createBranchStock({
@@ -341,6 +363,8 @@ export const AdminStock: React.FC = () => {
           restockQuantity: created.restock_quantity,
           restockDate: created.restock_date,
           available: null,
+          futureCommitted: null,
+          remainingRestock: null,
         });
       }
       setAddModal(false);
@@ -393,8 +417,10 @@ export const AdminStock: React.FC = () => {
         <div className="flex flex-wrap gap-4 text-xs">
           {[
             ["Physical Stock", "branch_stock.quantity in database", "#4F46E5"],
-            ["Reserved", "Active TEMPORARY holds (physical − available)", "#F59E0B"],
+            ["Reserved (TEMPORARY)", "Active TEMPORARY holds (physical − available)", "#F59E0B"],
             ["Available", "physical − active temporary reservations", "#10B981"],
+            ["Future committed", "ACTIVE FUTURE units awaiting restock", "#7C3AED"],
+            ["Remaining restock", "restock quantity − FUTURE committed", "#0EA5E9"],
             ["No stock record", "No branch_stock row for this pair", "#94A3B8"],
           ].map(([label, desc, color]) => (
             <div key={label} className="flex items-center gap-2">
@@ -432,7 +458,7 @@ export const AdminStock: React.FC = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[#E2E8F0]">
-                  {["Product", "Physical", "Restock Qty", "Restock Date", "Reserved", "Available", ""].map((h) => (
+                  {["Product", "Physical", "Restock Qty", "Restock Date", "Temp. Reserved", "Available", "Future committed", "Remaining restock", ""].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-[#64748B] uppercase tracking-wide whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -449,7 +475,7 @@ export const AdminStock: React.FC = () => {
                             <p className="font-medium text-[#0F172A] leading-tight">{product.name}</p>
                           </div>
                         </td>
-                        <td className="px-4 py-3" colSpan={5}>
+                        <td className="px-4 py-3" colSpan={7}>
                           <span className="inline-flex items-center text-xs font-medium text-[#64748B] bg-[#F1F5F9] border border-[#E2E8F0] px-2.5 py-1 rounded-lg">
                             No stock record
                           </span>
@@ -497,6 +523,24 @@ export const AdminStock: React.FC = () => {
                       <td className="px-4 py-3">
                         {avail != null ? (
                           <span className={`font-mono-data font-bold px-2 py-0.5 rounded-lg border text-xs ${availableColor(avail)}`}>{avail}</span>
+                        ) : (
+                          <span className="text-[#94A3B8]">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {entry.futureCommitted != null ? (
+                          <span className="font-mono-data font-medium text-[#7C3AED]">
+                            {entry.futureCommitted}
+                          </span>
+                        ) : (
+                          <span className="text-[#94A3B8]">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {entry.remainingRestock != null ? (
+                          <span className="font-mono-data font-medium text-[#0EA5E9]">
+                            {entry.remainingRestock}
+                          </span>
                         ) : (
                           <span className="text-[#94A3B8]">—</span>
                         )}

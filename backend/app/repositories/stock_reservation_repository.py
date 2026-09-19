@@ -90,3 +90,25 @@ def get_active_future_committed_quantity(
     )
 
     return int(result or 0)
+
+
+def get_total_active_future_committed_quantity(db: Session) -> int:
+    """
+    Sum of all ACTIVE FUTURE reservation units across every branch/product.
+    """
+
+    result = (
+        db.query(
+            func.coalesce(
+                func.sum(StockReservation.quantity),
+                0,
+            )
+        )
+        .filter(
+            StockReservation.status == "ACTIVE",
+            StockReservation.reservation_type == "FUTURE",
+        )
+        .scalar()
+    )
+
+    return int(result or 0)

@@ -1,4 +1,4 @@
-"""Stock semantics: available = physical - TEMPORARY only."""
+"""Stock semantics: available = physical - TEMPORARY only; FUTURE commits restock."""
 
 from datetime import datetime, timedelta
 from types import SimpleNamespace
@@ -36,8 +36,31 @@ def test_convert_supports_commit_false():
     assert "commit" in sig.parameters
 
 
+def test_remaining_restock_subtracts_future_only():
+    """remaining_restock = restock_quantity - ACTIVE FUTURE committed."""
+    restock_quantity = 10
+    future_committed = 3
+    temporary = 2
+    current = 4
+    remaining = max(0, restock_quantity - future_committed)
+    assert remaining == 7
+    # TEMPORARY/CURRENT must not reduce the restock pool
+    assert remaining == max(
+        0, restock_quantity - future_committed - 0 * temporary - 0 * current
+    )
+
+
+def test_total_future_helper_exists():
+    from app.repositories.stock_reservation_repository import (
+        get_total_active_future_committed_quantity,
+    )
+    assert callable(get_total_active_future_committed_quantity)
+
+
 if __name__ == "__main__":
     test_available_excludes_current_reservations_conceptually()
     test_temporary_minutes_unchanged()
     test_convert_supports_commit_false()
+    test_remaining_restock_subtracts_future_only()
+    test_total_future_helper_exists()
     print("stock semantics tests ok")

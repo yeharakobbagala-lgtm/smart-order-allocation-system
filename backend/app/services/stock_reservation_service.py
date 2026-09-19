@@ -8,6 +8,7 @@ from app.models.stock_reservation import StockReservation
 from app.repositories.stock_reservation_repository import (
     get_active_temporary_reserved_quantity,
     get_active_future_committed_quantity,
+    get_total_active_future_committed_quantity,
 )
 from app.utils.datetime_utc import utc_now_naive
 

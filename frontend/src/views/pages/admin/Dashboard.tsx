@@ -7,6 +7,7 @@ import {
   fetchAdminUsers,
   fetchBranchStock,
   fetchBranches,
+  fetchFutureReservationSummary,
   fetchProducts,
   fetchStockAvailability,
   ApiError,
@@ -38,6 +39,7 @@ export const AdminDashboard: React.FC<Props> = ({ navigate }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [userCount, setUserCount] = useState(0);
+  const [futureUnits, setFutureUnits] = useState(0);
   const [lowStock, setLowStock] = useState<
     { name: string; branch: string; available: number }[]
   >([]);
@@ -48,13 +50,16 @@ export const AdminDashboard: React.FC<Props> = ({ navigate }) => {
     setLoading(true);
     setError("");
     try {
-      const [apiOrders, apiProducts, apiBranches, apiStock, users] =
+      const [apiOrders, apiProducts, apiBranches, apiStock, users, futureSummary] =
         await Promise.all([
           fetchAllOrders(),
           fetchProducts(),
           fetchBranches(),
           fetchBranchStock(),
           fetchAdminUsers().catch(() => []),
+          fetchFutureReservationSummary().catch(() => ({
+            total_future_units: 0,
+          })),
         ]);
       const mappedProducts = apiProducts.map(mapApiProduct);
       const mappedBranches: Branch[] = apiBranches.map((b) => ({
@@ -73,6 +78,7 @@ export const AdminDashboard: React.FC<Props> = ({ navigate }) => {
       setProducts(mappedProducts);
       setBranches(mappedBranches);
       setUserCount(users.length);
+      setFutureUnits(futureSummary.total_future_units);
 
       const branchNames = Object.fromEntries(
         mappedBranches.map((b) => [b.id, b.name])
@@ -163,10 +169,16 @@ export const AdminDashboard: React.FC<Props> = ({ navigate }) => {
         <StatCard label="Processing" value={processing} icon={<IconInventory size={18} />} color="#F59E0B" />
         <StatCard label="Delivered" value={delivered} icon={<IconPackage size={18} />} color="#10B981" />
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Total Products" value={products.filter((p) => p.active).length} icon={<IconInventory size={18} />} color="#8B5CF6" />
         <StatCard label="Active Branches" value={branches.filter((b) => b.active).length} icon={<IconBranch size={18} />} color="#06B6D4" />
         <StatCard label="Users" value={userCount} icon={<IconUsers size={18} />} color="#EC4899" />
+        <StatCard
+          label="Future restock units"
+          value={futureUnits}
+          icon={<IconAlert size={18} />}
+          color="#7C3AED"
+        />
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">

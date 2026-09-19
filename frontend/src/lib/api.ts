@@ -531,9 +531,21 @@ export function fetchStockAvailability(
     product_id: number;
     physical_quantity: number;
     available_quantity: number;
+    future_committed_quantity: number;
+    restock_quantity: number;
+    remaining_restock_quantity: number;
+    restock_date: string | null;
   }>(`/reservations/availability/${branchId}/${productId}?${q}`, {
     method: "GET",
   });
+}
+
+export function fetchFutureReservationSummary() {
+  return apiFetch<{ total_future_units: number }>(
+    "/admin/reservations/future-summary",
+    { method: "GET" },
+    true
+  );
 }
 
 /* ── Admin users ──────────────────────────────────────── */
